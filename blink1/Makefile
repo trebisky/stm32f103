@@ -3,12 +3,15 @@
 #TOOLS = arm-linux-gnu
 TOOLS = arm-none-eabi
 
+# Assembling with gcc makes it want crt0 at link time.
+#AS = $(TOOLS)-gcc
 AS = $(TOOLS)-as
-CC = $(TOOLS)-gcc
+CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd
 OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
+GDB = $(TOOLS)-gdb
 
 OBJS = locore.o blink.o
 
@@ -32,8 +35,18 @@ blink.o:	blink.c
 #        $(LD) -g -T kyu.lds -e kern_startup -o kyu $(OBJS) $(LIBS)
 # -nostdlib -nostartfiles -ffreestanding
 
+# To burn the image:
+#  Connect the STLINK gadget to the target.
+#  Be sure and start openOCD in this directory.
+#    (or else it won't be able to find the bin file).
+#  Then use "make flash" to start an openocd console session.
+#  Type: reset halt
+#  Type: flash write_image erase blink.bin 0x08000000
+flash:
+	@echo "type: flash write_image erase blink.bin 0x08000000"
+	telnet localhost 4444
 gdb:
-	arm-none-eabi-gdb --eval-command="target remote localhost:3333" blink.elf
+	$(GDB) --eval-command="target remote localhost:3333" blink.elf
 
 clean:
 	rm -f *.o blink.elf blink.bin
