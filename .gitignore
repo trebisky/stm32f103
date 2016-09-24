@@ -1,4 +1,5 @@
 *.o
 *.elf
 *.bin
+*.dump
 loader/loader
