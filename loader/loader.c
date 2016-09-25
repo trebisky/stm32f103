@@ -21,8 +21,7 @@
  *  rubyserial, but that just was not working out.
  * 
  * If this fails to start up and make a connection to the
- *  boot loader, try doing a board reset, then launching
- *  this program.  This is common and typical.
+ *  boot loader, be sure the BOOT0 jumper is in the "1" position.
  *
  * Here is a memory map of my chip from page 34 of the data sheet.
  *

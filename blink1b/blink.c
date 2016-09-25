@@ -49,7 +49,7 @@ struct gpio {
  * or just moving the code inline would be even
  * better.  Not that it matters here (we are
  * burning CPU cycles in the delay loop anyway),
- * but I am interesting in looking at the objdump
+ * but I am interested in looking at the objdump
  * output and learning proper tricks for places
  * where time (and more importantly space) matter.
  */
