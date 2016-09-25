@@ -6,7 +6,9 @@ TOOLS = arm-none-eabi
 # Assembling with gcc makes it want crt0 at link time.
 #AS = $(TOOLS)-gcc
 AS = $(TOOLS)-as
-CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
+# Use the -g flag if you intend to use gdb
+#CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
+CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -g
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd
 OBJCOPY = $(TOOLS)-objcopy
@@ -47,6 +49,9 @@ flash:
 	telnet localhost 4444
 gdb:
 	$(GDB) --eval-command="target remote localhost:3333" blink.elf
+
+gdbtui:
+	$(GDB) -tui --eval-command="target remote localhost:3333" blink.elf
 
 clean:
 	rm -f *.o blink.elf blink.bin
