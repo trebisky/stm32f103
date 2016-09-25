@@ -1,4 +1,6 @@
-/* blink.c */
+/* blink.c
+ * (c) Tom Trebisky  9-24-2016
+ */
 
 /* The reset and clock control module */
 struct rcc {

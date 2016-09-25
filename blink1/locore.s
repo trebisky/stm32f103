@@ -4,8 +4,6 @@
  */
 
 # The Cortex M3 is a thumb only processor
-# also consider using .thumb_func
-#    to get proper subroutine linkages
 .cpu cortex-m3
 .thumb
 
