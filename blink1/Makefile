@@ -9,6 +9,7 @@ AS = $(TOOLS)-as
 # Use the -g flag if you intend to use gdb
 #CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
 CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -g
+
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd
 OBJCOPY = $(TOOLS)-objcopy
@@ -34,9 +35,6 @@ locore.o:	locore.s
 blink.o:	blink.c
 	$(CC) -c blink.c
 
-#        $(LD) -g -T kyu.lds -e kern_startup -o kyu $(OBJS) $(LIBS)
-# -nostdlib -nostartfiles -ffreestanding
-
 # To burn the image:
 #  Connect the STLINK gadget to the target.
 #  Be sure and start openOCD in this directory.
@@ -54,4 +52,4 @@ gdbtui:
 	$(GDB) -tui --eval-command="target remote localhost:3333" blink.elf
 
 clean:
-	rm -f *.o blink.elf blink.bin
+	rm -f *.o blink.elf blink.bin blink.dump
