@@ -1,5 +1,9 @@
 /* blink.c
  * (c) Tom Trebisky  9-24-2016
+ *
+ * This is just a minor tweak on the first
+ * demo to try out some code and compiler
+ * optimization.
  */
 
 /* The reset and clock control module */
@@ -22,6 +26,7 @@ struct rcc {
 
 #define RCC_BASE	(struct rcc *) 0x40021000
 
+
 /* One of the 3 gpios */
 struct gpio {
 	volatile unsigned long cr[2];
@@ -35,6 +40,23 @@ struct gpio {
 #define GPIOA_BASE	(struct gpio *) 0x40010800
 #define GPIOB_BASE	(struct gpio *) 0x40010C00
 #define GPIOC_BASE	(struct gpio *) 0x40011000
+
+/* This file is an experiment with using these types
+ * of constructions.  They help a little bit to generate
+ * better code, but frankly with the -O2 switch,
+ * the compiler does a pretty good job.
+ * Making the led_on and off functions macros
+ * or just moving the code inline would be even
+ * better.  Not that it matters here (we are
+ * burning CPU cycles in the delay loop anyway),
+ * but I am interesting in looking at the objdump
+ * output and learning proper tricks for places
+ * where time (and more importantly space) matter.
+ */
+#define RCC_p		(RCC_BASE)
+#define GPIOA_p		(GPIOA_BASE)
+#define GPIOB_p		(GPIOB_BASE)
+#define GPIOC_p		(GPIOC_BASE)
 
 #define MODE_OUT_2	0x02	/* Output, 2 Mhz */
 
@@ -60,17 +82,17 @@ led_init ( int bit )
 {
 	int conf;
 	int shift;
-	struct rcc *rp = RCC_BASE;
+	// struct rcc *rp = RCC_BASE;
 
 	/* Turn on GPIO C */
-	rp->ape2 |= GPIOC_ENABLE;
+	RCC_p->ape2 |= GPIOC_ENABLE;
 
-	gp = GPIOC_BASE;
+	// gp = GPIOC_BASE;
 
 	shift = (bit - 8) * 4;
-	conf = gp->cr[1] & ~(0xf<<shift);
+	conf = GPIOC_p->cr[1] & ~(0xf<<shift);
 	conf |= (MODE_OUT_2|CONF_GP_OD) << shift;
-	gp->cr[1] = conf;
+	GPIOC_p->cr[1] = conf;
 
 	on_mask = 1 << bit;
 	off_mask = 1 << (bit+16);
@@ -79,13 +101,13 @@ led_init ( int bit )
 void
 led_on ( void )
 {
-	gp->bsrr = on_mask;
+	GPIOC_p->bsrr = on_mask;
 }
 
 void
 led_off ( void )
 {
-	gp->bsrr = off_mask;
+	GPIOC_p->bsrr = off_mask;
 }
 
 #define PC13	13
