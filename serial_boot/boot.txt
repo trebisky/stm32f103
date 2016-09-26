@@ -12,8 +12,16 @@
 ; some kind and not part of flash memory.
 ; This memory is apparently immutable, making it
 ;  impossible to brick one of these devices.
+;
+; Note that there is another area called the "options bytes".
+;  I was able to dump this area (512 bytes in size)
+;  I am on the lookout for it in this code ...
+;    dump_image options.bin 0x1ffff800 0x200
+; A google search on "stm32f103 options bytes" turns up some
+;  information, but this aspect of the chip seems to be
+:  shrouded in mystery....
 ; 
-; This occupied 2K in the "system memory".
+; The boot firware occupied 2K in the "system memory".
 ;  A side note on thumb compression.
 ;  There are about 765 instructions here.
 ;  Conventional ARM would use 4*765 = 3060 bytes
@@ -36,7 +44,13 @@
 ;	0x40021000 - RCC (reset and clock)
 ;	0x40022000 - Flash interface
 ;	0x40013800 - USART1
+;
 ;	0x08000000 - flash base (not seen)
+;	0x20000000 - 0x20005000 ram
+;
+;	0x1ffff000 = 0x1ffff7ff - this firmware
+;	0x1ffff800 = 0x1ffff9ff - option bytes
+    
 
 1ffff000: 200001fc		.word 0x200001fc 	; initial stack
 1ffff004: 1ffff021		.word 0x1ffff021 	; reset
@@ -117,9 +131,12 @@
 1ffff088:	f020 0020 	bic.w	r0, r0, #32
 1ffff08c:	6110      	str	r0, [r2, #16]
 1ffff08e:	bd00      	pop	{pc}
+
+; called to handle 0x82 and 0x92
 1ffff090:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
 1ffff094:	4682      	mov	sl, r0
 1ffff096:	f7ff ffd3 	bl	0x1ffff040
+; set r3 = 1ffff802 (in option bytes)
 1ffff09a:	4be9      	ldr	r3, [pc, #932]	; (0x1ffff440)
 1ffff09c:	f8b3 8000 	ldrh.w	r8, [r3]
 1ffff0a0:	885c      	ldrh	r4, [r3, #2]
@@ -170,7 +187,11 @@
 1ffff126:	6910      	ldr	r0, [r2, #16]
 1ffff128:	f020 0010 	bic.w	r0, r0, #16
 1ffff12c:	6110      	str	r0, [r2, #16]
+
+; a return
 1ffff12e:	e8bd 87f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, pc}
+
+; many calls to here.
 1ffff132:	49c0      	ldr	r1, [pc, #768]	; (0x1ffff434) flash
 1ffff134:	2000      	movs	r0, #0
 1ffff136:	69c9      	ldr	r1, [r1, #28]
@@ -180,6 +201,7 @@
 1ffff13e:	4770      	bx	lr
 
 1ffff140:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
+; set r3 = 1ffff802 (in option bytes)
 1ffff144:	4bbe      	ldr	r3, [pc, #760]	; (0x1ffff440)
 1ffff146:	1e9b      	subs	r3, r3, #2
 1ffff148:	881f      	ldrh	r7, [r3, #0]
@@ -495,7 +517,7 @@
 1ffff434: 40022000		.word 0x40022000 	; Flash interface
 1ffff438: 45670123		.word 0x45670123 
 1ffff43c: cdef89ab		.word 0xcdef89ab 
-1ffff440: 1ffff802		.word 0x1ffff802 
+1ffff440: 1ffff802		.word 0x1ffff802 	; in option bytes
 1ffff444: 40003000		.word 0x40003000 	; Iwdg
 1ffff448: dffffe00		.word 0xdffffe00 
 1ffff44c: e0000800		.word 0xe0000800 
@@ -518,6 +540,7 @@
 1ffff478: 40013804		.word 0x40013804 	; uart data reg
 
 1ffff47c:	e021      	b.n	0x1ffff4c2
+
 1ffff47e:	d15a      	bne.n	0x1ffff536
 1ffff480:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff482:	f7ff fdd1 	bl	0x1ffff028	; putc
@@ -543,9 +566,9 @@
 1ffff4b2:	2801      	cmp	r0, #1
 1ffff4b4:	d168      	bne.n	0x1ffff588
 1ffff4b6:	e03e      	b.n	0x1ffff536
-1ffff4b8:	2c82      	cmp	r4, #130	; 0x82
+1ffff4b8:	2c82      	cmp	r4, #130	; 0x82 << Hmm
 1ffff4ba:	d07e      	beq.n	0x1ffff5ba
-1ffff4bc:	2c92      	cmp	r4, #146	; 0x92
+1ffff4bc:	2c92      	cmp	r4, #146	; 0x92 << AHA
 1ffff4be:	d07d      	beq.n	0x1ffff5bc
 1ffff4c0:	e039      	b.n	0x1ffff536
 1ffff4c2:	2200      	movs	r2, #0
@@ -680,6 +703,9 @@
 1ffff610:	d1f9      	bne.n	0x1ffff606
 1ffff612:	f1bc 0f04 	cmp.w	ip, #4
 1ffff616:	d151      	bne.n	0x1ffff6bc
+
+; get base address for option bytes.
+; test the first one
 1ffff618:	484e      	ldr	r0, [pc, #312]	; (0x1ffff754)
 1ffff61a:	4580      	cmp	r8, r0
 1ffff61c:	d14e      	bne.n	0x1ffff6bc
@@ -770,17 +796,26 @@
 1ffff708:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff70a:	f7ff fc8d 	bl	0x1ffff028	; putc
 1ffff70e:	e019      	b.n	0x1ffff744
+
+; Here to handle 0x82 (set read protection)
 1ffff710:	f7ff fd0f 	bl	0x1ffff132
 1ffff714:	2801      	cmp	r0, #1
 1ffff716:	d0af      	beq.n	0x1ffff678
 1ffff718:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff71a:	f7ff fc85 	bl	0x1ffff028	; putc
 1ffff71e:	2001      	movs	r0, #1
+
+; if we fall through, r0 = 1, if jumped from below, r0 = 0;
 1ffff720:	f7ff fcb6 	bl	0x1ffff090
 1ffff724:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff726:	f7ff fc7f 	bl	0x1ffff028	; putc
 1ffff72a:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
 1ffff72e:	e664      	b.n	0x1ffff3fa
+
+; Here to handle 0x92 (clear read protection)
+; looks like it writes zeros to the area
+; from 0x20000200 to 0x20004fff
+; This is all but the first 512 bytes of the 20K static ram.
 1ffff730:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff732:	f7ff fc79 	bl	0x1ffff028	; putc
 1ffff736:	4809      	ldr	r0, [pc, #36]	; (0x1ffff75c)
@@ -789,6 +824,7 @@
 1ffff73c:	f840 1904 	str.w	r1, [r0], #-4
 1ffff740:	4290      	cmp	r0, r2
 1ffff742:	d1fb      	bne.n	0x1ffff73c
+; now enter the above with r0 = 0
 1ffff744:	2000      	movs	r0, #0
 1ffff746:	e7eb      	b.n	0x1ffff720
 
@@ -797,7 +833,7 @@
 1ffff748: 40021000		.word 0x40021000 	; RCC base
 1ffff74c: f8ff0000		.word 0xf8ff0000 
 1ffff750: fef6ffff		.word 0xfef6ffff 
-1ffff754: 1ffff800		.word 0x1ffff800 
+1ffff754: 1ffff800		.word 0x1ffff800 	; option bytes
 1ffff758: 40022000		.word 0x40022000 	; Flash interface
 1ffff75c: 20004ffc		.word 0x20004ffc 
 1ffff760: 200001fc		.word 0x200001fc 
