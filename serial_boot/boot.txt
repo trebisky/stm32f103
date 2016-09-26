@@ -36,7 +36,7 @@
 ;	0x40021000 - RCC (reset and clock)
 ;	0x40022000 - Flash interface
 ;	0x40013800 - USART1
-;	0x08000000 - flash (not seen)
+;	0x08000000 - flash base (not seen)
 
 1ffff000: 200001fc		.word 0x200001fc 	; initial stack
 1ffff004: 1ffff021		.word 0x1ffff021 	; reset
@@ -66,6 +66,7 @@
 
 1ffff024: 1ffff011		.word 0x1ffff011 
 
+; ----------------------------------------
 ; subroutine, putc()
 1ffff028:	49ff      	ldr	r1, [pc, #1020]	; (0x1ffff428) UART
 1ffff02a:	f8a1 0804 	strh.w	r0, [r1, #2052]	; 0x804  uart data
@@ -231,6 +232,7 @@
 1ffff1de:	6110      	str	r0, [r2, #16]
 1ffff1e0:	e7a5      	b.n	0x1ffff12e
 
+; ----------------------------------------
 ; read character from uart == getc()
 ; sets r2 = 40013000, which leads to uart
 ;  r2 + 0x800 yields status reg
@@ -262,7 +264,7 @@
 1ffff216:	f7ff ffe4 	bl	0x1ffff1e2	; getc
 1ffff21a:	42a8      	cmp	r0, r5
 1ffff21c:	d004      	beq.n	0x1ffff228
-1ffff21e:	201f      	movs	r0, #31
+1ffff21e:	201f      	movs	r0, #31		; 0x1f NACK
 1ffff220:	f7ff ff02 	bl	0x1ffff028	; putc
 1ffff224:	2055      	movs	r0, #85	; 0x55
 1ffff226:	bd70      	pop	{r4, r5, r6, pc}
@@ -359,7 +361,7 @@
 1ffff2fa:	2500      	movs	r5, #0
 1ffff2fc:	f7ff ff19 	bl	0x1ffff132
 1ffff300:	b9f0      	cbnz	r0, 0x1ffff340
-1ffff302:	2079      	movs	r0, #121	; 0x79
+1ffff302:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff304:	f7ff fe90 	bl	0x1ffff028	; putc
 1ffff308:	f7ff ff6b 	bl	0x1ffff1e2	; getc
 1ffff30c:	4604      	mov	r4, r0
@@ -376,24 +378,29 @@
 1ffff32e:	f7ff ff58 	bl	0x1ffff1e2	; getc
 1ffff332:	42a0      	cmp	r0, r4
 1ffff334:	d104      	bne.n	0x1ffff340
-1ffff336:	2079      	movs	r0, #121	; 0x79
+1ffff336:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff338:	f7ff fe76 	bl	0x1ffff028	; putc
 1ffff33c:	4628      	mov	r0, r5
 1ffff33e:	bd30      	pop	{r4, r5, pc}
-1ffff340:	201f      	movs	r0, #31
+1ffff340:	201f      	movs	r0, #31		; 0x1f NACK
 1ffff342:	f7ff fe71 	bl	0x1ffff028	; putc
 1ffff346:	f04f 3055 	mov.w	r0, #1431655765	; 0x55555555
 1ffff34a:	bd30      	pop	{r4, r5, pc}
 
 ; startup makes it to here (only call)
+; *************
 ; "bootmain"
+; *************
+
 1ffff34c:	e92d 4ff0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
 1ffff350:	a140      	add	r1, pc, #256	; (adr r1, 0x454)
 1ffff352:	c93c      	ldmia	r1!, {r2, r3, r4, r5}
 1ffff354:	b0c5      	sub	sp, #276	; 0x114
 1ffff356:	a801      	add	r0, sp, #4
 1ffff358:	c03c      	stmia	r0!, {r2, r3, r4, r5}
-1ffff35a:	f000 fa23 	bl	0x1ffff7a4
+
+1ffff35a:	f000 fa23 	bl	0x1ffff7a4	; interrupts off
+
 1ffff35e:	4a39      	ldr	r2, [pc, #228]	; (0x1ffff444) IWDG
 1ffff360:	f245 5055 	movw	r0, #21845	; 0x5555
 1ffff364:	6010      	str	r0, [r2, #0]
@@ -418,6 +425,8 @@
 1ffff390:	2400      	movs	r4, #0
 1ffff392:	f04f 26e0 	mov.w	r6, #3758153728	; 0xe000e000
 1ffff396:	f8c6 4d08 	str.w	r4, [r6, #3336]	; 0xd08
+
+; load r0 = 40010000
 1ffff39a:	4836      	ldr	r0, [pc, #216]	; (0x1ffff474) AFIO
 1ffff39c:	4934      	ldr	r1, [pc, #208]	; (0x1ffff470)
 1ffff39e:	f8c0 1804 	str.w	r1, [r0, #2052]	; 0x804
@@ -442,6 +451,8 @@
 1ffff3ce:	69b0      	ldr	r0, [r6, #24]
 1ffff3d0:	2100      	movs	r1, #0
 1ffff3d2:	f5c0 2500 	rsb	r5, r0, #524288	; 0x80000
+
+; r0 = 40013804 (Uart data)
 1ffff3d6:	4828      	ldr	r0, [pc, #160]	; (0x1ffff478)	Uart data
 1ffff3d8:	8001      	strh	r1, [r0, #0]
 1ffff3da:	2407      	movs	r4, #7
@@ -453,7 +464,7 @@
 1ffff3ea:	8281      	strh	r1, [r0, #20]
 1ffff3ec:	f243 410c 	movw	r1, #13324	; 0x340c
 1ffff3f0:	8101      	strh	r1, [r0, #8]
-1ffff3f2:	2079      	movs	r0, #121	; 0x79
+1ffff3f2:	2079      	movs	r0, #121	; 0x79	ACK
 1ffff3f4:	f7ff fe18 	bl	0x1ffff028	; putc
 1ffff3f8:	4f0c      	ldr	r7, [pc, #48]	; (0x1ffff42c)
 1ffff3fa:	4812      	ldr	r0, [pc, #72]	; (0x1ffff444) IWDG
@@ -508,7 +519,7 @@
 
 1ffff47c:	e021      	b.n	0x1ffff4c2
 1ffff47e:	d15a      	bne.n	0x1ffff536
-1ffff480:	2079      	movs	r0, #121	; 0x79
+1ffff480:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff482:	f7ff fdd1 	bl	0x1ffff028	; putc
 1ffff486:	2022      	movs	r0, #34	; 0x22
 1ffff488:	f7ff fdce 	bl	0x1ffff028	; putc
@@ -545,7 +556,7 @@
 1ffff4ce:	2a0f      	cmp	r2, #15
 1ffff4d0:	d3f9      	bcc.n	0x1ffff4c6
 1ffff4d2:	e792      	b.n	0x1ffff3fa
-1ffff4d4:	2079      	movs	r0, #121	; 0x79
+1ffff4d4:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff4d6:	f7ff fda7 	bl	0x1ffff028	; putc
 1ffff4da:	2001      	movs	r0, #1
 1ffff4dc:	f7ff fda4 	bl	0x1ffff028	; putc
@@ -571,7 +582,7 @@
 1ffff514:	d10f      	bne.n	0x1ffff536
 1ffff516:	e000      	b.n	0x1ffff51a
 1ffff518:	e037      	b.n	0x1ffff58a
-1ffff51a:	2079      	movs	r0, #121	; 0x79
+1ffff51a:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff51c:	f7ff fd84 	bl	0x1ffff028	; putc
 1ffff520:	1c64      	adds	r4, r4, #1
 1ffff522:	d0d6      	beq.n	0x1ffff4d2
@@ -609,7 +620,7 @@
 1ffff56e:	6048      	str	r0, [r1, #4]
 1ffff570:	2000      	movs	r0, #0
 1ffff572:	6130      	str	r0, [r6, #16]
-1ffff574:	f000 f914 	bl	0x1ffff7a0
+1ffff574:	f000 f914 	bl	0x1ffff7a0	; interrupts on
 1ffff578:	6865      	ldr	r5, [r4, #4]
 1ffff57a:	6820      	ldr	r0, [r4, #0]
 1ffff57c:	f000 f90c 	bl	0x1ffff798
@@ -698,14 +709,14 @@
 1ffff65e:	6918      	ldr	r0, [r3, #16]
 1ffff660:	f020 0010 	bic.w	r0, r0, #16
 1ffff664:	6118      	str	r0, [r3, #16]
-1ffff666:	2079      	movs	r0, #121	; 0x79
+1ffff666:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff668:	f7ff fcde 	bl	0x1ffff028	; putc
 1ffff66c:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
 1ffff670:	e024      	b.n	0x1ffff6bc
 1ffff672:	f7ff fd5e 	bl	0x1ffff132
 1ffff676:	2801      	cmp	r0, #1
 1ffff678:	f43f af11 	beq.w	0x1ffff49e
-1ffff67c:	2079      	movs	r0, #121	; 0x79
+1ffff67c:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff67e:	f7ff fcd3 	bl	0x1ffff028	; putc
 1ffff682:	f7ff fdae 	bl	0x1ffff1e2	; getc
 1ffff686:	28ff      	cmp	r0, #255	; 0xff
@@ -727,9 +738,9 @@
 1ffff6b4:	f7ff fdba 	bl	0x1ffff22c
 1ffff6b8:	1e64      	subs	r4, r4, #1
 1ffff6ba:	d1f7      	bne.n	0x1ffff6ac
-1ffff6bc:	2079      	movs	r0, #121	; 0x79
+1ffff6bc:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff6be:	e716      	b.n	0x1ffff4ee
-1ffff6c0:	2079      	movs	r0, #121	; 0x79
+1ffff6c0:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff6c2:	f7ff fcb1 	bl	0x1ffff028	; putc
 1ffff6c6:	f7ff fd8c 	bl	0x1ffff1e2	; getc
 1ffff6ca:	ad05      	add	r5, sp, #20
@@ -756,21 +767,21 @@
 1ffff700:	f7ff fd17 	bl	0x1ffff132
 1ffff704:	2801      	cmp	r0, #1
 1ffff706:	d0b7      	beq.n	0x1ffff678
-1ffff708:	2079      	movs	r0, #121	; 0x79
+1ffff708:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff70a:	f7ff fc8d 	bl	0x1ffff028	; putc
 1ffff70e:	e019      	b.n	0x1ffff744
 1ffff710:	f7ff fd0f 	bl	0x1ffff132
 1ffff714:	2801      	cmp	r0, #1
 1ffff716:	d0af      	beq.n	0x1ffff678
-1ffff718:	2079      	movs	r0, #121	; 0x79
+1ffff718:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff71a:	f7ff fc85 	bl	0x1ffff028	; putc
 1ffff71e:	2001      	movs	r0, #1
 1ffff720:	f7ff fcb6 	bl	0x1ffff090
-1ffff724:	2079      	movs	r0, #121	; 0x79
+1ffff724:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff726:	f7ff fc7f 	bl	0x1ffff028	; putc
 1ffff72a:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
 1ffff72e:	e664      	b.n	0x1ffff3fa
-1ffff730:	2079      	movs	r0, #121	; 0x79
+1ffff730:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff732:	f7ff fc79 	bl	0x1ffff028	; putc
 1ffff736:	4809      	ldr	r0, [pc, #36]	; (0x1ffff75c)
 1ffff738:	4a09      	ldr	r2, [pc, #36]	; (0x1ffff760)
