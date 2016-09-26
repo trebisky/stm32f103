@@ -1,0 +1,49 @@
+#!/usr/bin/ruby
+#
+# Tom Trebisky    9-25-2016
+#
+# "longs"
+#
+# dump a binary image as a bunch of longs
+#
+
+$start_addr = 0x1ffff000
+
+def dump_line ( addr, r, w )
+	print "%08x: " % addr
+
+	print "%08x" % w
+	print "\t\t"
+	print ".word 0x%08x " % w
+	print "\n"
+end
+
+def dofile ( name )
+    f = File.new( name )
+
+    addr = $start_addr
+    while buf = f.read( 4 )
+	# The read yields a string
+	# we unpack to a single 32 bit item
+	raw = buf.unpack('N')
+	val = buf.unpack('V')
+
+	dump_line addr, raw, val
+	addr += 4
+    end
+
+    f.close
+end
+
+# -----------------------------------------
+
+if ARGV.size < 1
+	puts "usage: longs file"
+	exit
+end
+
+ARGV.each { |arg|
+	dofile arg
+}
+
+# THE END

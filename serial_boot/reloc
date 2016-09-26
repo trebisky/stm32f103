@@ -1,0 +1,54 @@
+#!/bin/ruby
+
+# relocate zero based disassembly
+# Tom Trebisky  9-25-2016
+
+infile = "naive2.dis"
+
+$base = 0x1ffff000
+start = true
+
+def fixref ( l )
+    w = l.split "(0x"
+    val = w[1].chop.hex
+    return w[0] + "(0x%08x)" % (val + $base)
+end
+
+def fixaddr ( l )
+    w = l.split ":"
+    tail = w[1]
+    if w.size > 2
+	tail = w[1..-1].join(":")
+    end
+    addr = $base + w[0].hex
+    return "%08x:"%addr + tail
+end
+
+def fixbranch ( l )
+    return l if l =~ /UNDEFINED/
+    return l if l =~ /\)$/
+    w = l.split
+    n = w.size
+    return l if w[n-1] !~ /^0x/
+    return l if w[n-2] == ";"
+
+    addr = $base + w[n-1].hex
+    start = l.chomp.sub /0x.*/,""
+    return start + "0x%08x" % addr
+end
+
+File.foreach(infile) { |x|
+    if start
+	if x =~ /^  20:/
+	    start = false
+	else
+	    next
+	end
+    end
+    if x =~ /\(0x/
+	x = fixref x
+    end
+    x = fixaddr x
+    x = fixbranch x
+    puts x
+}

@@ -1,0 +1,86 @@
+#!/usr/bin/ruby
+#
+# Tom Trebisky
+#   6-1-2016
+#
+# A new version of my odx program
+#
+# options for byte swapping
+#  and to mask high bit for character display
+#
+# -s -- swap bytes in 16 bit words
+# -h -- mask high bit for ascii display
+# -ixxx - start addresses with given hex value
+
+$mask_high = false
+$swap_bytes = false
+$start_addr = 0
+
+# dump a single line
+def printc ( val )
+	val &= 0x7f if $mask_high
+	if val >= 0x20 and val <= 0x7e
+	    print val.chr
+	else
+	    print " "
+	end
+end
+
+def dump_line ( addr, words )
+	print "%08x" % addr, " "
+
+	words.each { |w|
+	    print "%04x " % w
+	}
+
+	print "  "
+
+	words.each { |w|
+	    printc ( (w>>8) & 0xff )
+	    printc ( w & 0xff )
+	}
+	print "\n"
+end
+
+def dofile ( name )
+    f = File.new( name )
+
+    addr = $start_addr
+    while buf = f.read( 16 )
+	# The read yields a string
+	# we unpack to an array of 16 bit items
+	if ( $swap_bytes )
+	    # little endian unpack
+	    #words = buf.unpack('S*')
+	    words = buf.unpack('v*')
+	else
+	    # big endian unpack
+	    words = buf.unpack('n*')
+	end
+	dump_line(addr,words)
+	addr += 16
+    end
+
+    f.close
+end
+
+# -----------------------------------------
+
+if ARGV.size < 1
+	puts "usage: odx file"
+	exit
+end
+
+ARGV.each { |arg|
+	if ( arg =~ /-i/ )
+	    $start_addr = arg.sub(/^-i/,"").hex
+	elsif ( arg =~ /-s/ )
+	    $swap_bytes = true
+	elsif ( arg =~ /^-h/ )
+	    $mask_high = true
+	else
+	    dofile arg
+	end
+}
+
+# THE END
