@@ -21,7 +21,7 @@
 ;  information, but this aspect of the chip seems to be
 :  shrouded in mystery....
 ; 
-; The boot firware occupied 2K in the "system memory".
+; The boot firmware occupied 2K in the "system memory".
 ;  A side note on thumb compression.
 ;  There are about 765 instructions here.
 ;  Conventional ARM would use 4*765 = 3060 bytes
@@ -52,7 +52,7 @@
 ;	0x1ffff800 = 0x1ffff9ff - option bytes
 ;
 ; Here is a list of known commands:
-;  #define STM_INIT	0x7F
+;  #define STM_INIT		0x7F
 ;  
 ;  #define STM_GET		0x00	/* get version and commands */
 ;  #define STM_GET2		0x01	/* get version and protect status */
@@ -96,6 +96,8 @@
 1ffff01e:       0000
 
 ; reset comes here, but quickly jumps up to the above.
+; via a somewhat elaborate and convoluted path, that
+really makes no sense at all.
 1ffff020:	4800      	ldr	r0, [pc, #0]	; (0x1ffff024)
 1ffff022:	4700      	bx	r0
 
@@ -213,6 +215,9 @@
 1ffff12e:	e8bd 87f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, pc}
 
 ; many calls to here.
+; some kind of check before dorking with flash
+; if this returns 1, the caller gives up with NACK
+; if this returns 0, the caller has the green light
 1ffff132:	49c0      	ldr	r1, [pc, #768]	; (0x1ffff434) flash
 1ffff134:	2000      	movs	r0, #0
 1ffff136:	69c9      	ldr	r1, [r1, #28]
@@ -605,14 +610,19 @@
 1ffff4a0:	2c73      	cmp	r4, #115	; 0x73 << dis W prot
 1ffff4a2:	d06f      	beq.n	0x1ffff584
 1ffff4a4:	dc08      	bgt.n	0x1ffff4b8
+
 1ffff4a6:	2c43      	cmp	r4, #67		; 0x43 << erase.
 1ffff4a8:	d06d      	beq.n	0x1ffff586
 1ffff4aa:	2c63      	cmp	r4, #99		; 0x63 << ena W prot
 1ffff4ac:	d143      	bne.n	0x1ffff536	; NEXT w/ NACK
+
+; enable write protection
 1ffff4ae:	f7ff fe40 	bl	0x1ffff132
 1ffff4b2:	2801      	cmp	r0, #1
-1ffff4b4:	d168      	bne.n	0x1ffff588
+1ffff4b4:	d168      	bne.n	0x1ffff588	; enable W prot
 1ffff4b6:	e03e      	b.n	0x1ffff536	; NEXT w/ NACK
+
+; Here with some command > 0x73
 1ffff4b8:	2c82      	cmp	r4, #130	; 0x82 << ena read prot
 1ffff4ba:	d07e      	beq.n	0x1ffff5ba
 1ffff4bc:	2c92      	cmp	r4, #146	; 0x92 << dis read prot
@@ -707,12 +717,19 @@
 1ffff574:	f000 f914 	bl	0x1ffff7a0	; interrupts on
 1ffff578:	6865      	ldr	r5, [r4, #4]
 1ffff57a:	6820      	ldr	r0, [r4, #0]
-1ffff57c:	f000 f90c 	bl	0x1ffff798
-1ffff580:	47a8      	blx	r5
+1ffff57c:	f000 f90c 	bl	0x1ffff798	; set main stack pointer
+1ffff580:	47a8      	blx	r5		; JUMP!
+; why would we ever get here?  Maybe the blx returns?
+; BLX is like a bl, but has the option to switch in or out of thumb
+; depending on bit 0 of the address being jumped to.
+
 1ffff582:	e73a      	b.n	0x1ffff3fa	; NEXT
-1ffff584:	e0bc      	b.n	0x1ffff700
-1ffff586:	e074      	b.n	0x1ffff672
-1ffff588:	e09a      	b.n	0x1ffff6c0
+
+; Why bounce through like this ?
+1ffff584:	e0bc      	b.n	0x1ffff700	; disable write protection
+1ffff586:	e074      	b.n	0x1ffff672	; erase flash
+1ffff588:	e09a      	b.n	0x1ffff6c0	; enable write protection
+
 1ffff58a:	f7ff feb5 	bl	0x1ffff2f8
 1ffff58e:	4680      	mov	r8, r0
 1ffff590:	f7ff fe94 	bl	0x1ffff2bc
@@ -800,6 +817,8 @@
 1ffff668:	f7ff fcde 	bl	0x1ffff028	; putc
 1ffff66c:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
 1ffff670:	e024      	b.n	0x1ffff6bc	; NEXT w/ACK
+
+; erase flash
 1ffff672:	f7ff fd5e 	bl	0x1ffff132
 1ffff676:	2801      	cmp	r0, #1
 1ffff678:	f43f af11 	beq.w	0x1ffff49e
@@ -830,6 +849,7 @@
 1ffff6bc:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff6be:	e716      	b.n	0x1ffff4ee	; NEXT w/ACK
 
+; enable write protection
 1ffff6c0:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff6c2:	f7ff fcb1 	bl	0x1ffff028	; putc
 1ffff6c6:	f7ff fd8c 	bl	0x1ffff1e2	; getc
@@ -854,9 +874,11 @@
 1ffff6f8:	4610      	mov	r0, r2
 1ffff6fa:	f7ff fd21 	bl	0x1ffff140
 1ffff6fe:	e011      	b.n	0x1ffff724
+
+; disable write protection
 1ffff700:	f7ff fd17 	bl	0x1ffff132
 1ffff704:	2801      	cmp	r0, #1
-1ffff706:	d0b7      	beq.n	0x1ffff678
+1ffff706:	d0b7      	beq.n	0x1ffff678	; erase flash ...
 1ffff708:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff70a:	f7ff fc8d 	bl	0x1ffff028	; putc
 1ffff70e:	e019      	b.n	0x1ffff744
@@ -916,16 +938,16 @@
 1ffff76e:	4d08      	ldr	r5, [pc, #32]	; (0x1ffff790)
 1ffff770:	e006      	b.n	0x1ffff780
 
-; loop that never runs
+; loop that never runs (we enter at f780 and fall right out.
 1ffff772:	68e0      	ldr	r0, [r4, #12]
 1ffff774:	f040 0301 	orr.w	r3, r0, #1
 1ffff778:	e894 0007 	ldmia.w	r4, {r0, r1, r2}
-1ffff77c:	4798      	blx	r3
+1ffff77c:	4798      	blx	r3	; jump far away
 1ffff77e:	3410      	adds	r4, #16
 1ffff780:	42ac      	cmp	r4, r5
 1ffff782:	d3f6      	bcc.n	0x1ffff772
 
-; 
+;  load the address to run at and jump back up top
 1ffff784:	4803      	ldr	r0, [pc, #12]	; (0x1ffff794)
 1ffff786:	f7ff fc49 	bl	0x1ffff01c
 
@@ -935,15 +957,17 @@
 1ffff790: 1ffff7a8		.word 0x1ffff7a8 
 1ffff794: 1ffff34d		.word 0x1ffff34d 
 
-; code branches to these 3 tiny routines
+; write to MSP from r0 (set the main stack pointer)
 1ffff798:	f380 8808 	msr	MSP, r0
 1ffff79c:	4770      	bx	lr
 
 1ffff79e:	0000
 
+; enable interrupts
 1ffff7a0:	b662      	cpsie	i
 1ffff7a2:	4770      	bx	lr
 
+; disable interrupts
 1ffff7a4:	b672      	cpsid	i
 1ffff7a6:	4770      	bx	lr
 
