@@ -50,6 +50,27 @@
 ;
 ;	0x1ffff000 = 0x1ffff7ff - this firmware
 ;	0x1ffff800 = 0x1ffff9ff - option bytes
+;
+; Here is a list of known commands:
+;  #define STM_INIT	0x7F
+;  
+;  #define STM_GET		0x00	/* get version and commands */
+;  #define STM_GET2		0x01	/* get version and protect status */
+;  #define STM_CHIP		0x02	/* get chip ID */
+;  
+;  #define STM_READ		0x11	/* read memory */
+;  #define STM_UNK1		0x12	/* unknown (listed in my devices list of commands) */
+;  #define STM_GO		0x21	/* Jump to flash or sram */
+;  #define STM_WRITE		0x31	/* write flash or sram */
+;  
+;  #define STM_ERASE		0x43	/* erase one to all pages */
+;  #define STM_ERASE_EXT	0x44	/* erase one to all, extended */
+;  
+;  #define STM_WPRO		0x63	/* write protect specified sectors */
+;  #define STM_UNPROTECT	0x73	/* disable write protect for all sectors */
+;  
+;  #define STM_RPRO		0x82	/* enable readout protection */
+;  #define STM_RPRO_DIS		0x92	/* disable readout protection */
     
 
 1ffff000: 200001fc		.word 0x200001fc 	; initial stack
@@ -288,7 +309,7 @@
 1ffff21c:	d004      	beq.n	0x1ffff228
 1ffff21e:	201f      	movs	r0, #31		; 0x1f NACK
 1ffff220:	f7ff ff02 	bl	0x1ffff028	; putc
-1ffff224:	2055      	movs	r0, #85	; 0x55
+1ffff224:	2055      	movs	r0, #85		; 0x55
 1ffff226:	bd70      	pop	{r4, r5, r6, pc}
 1ffff228:	20aa      	movs	r0, #170	; 0xaa
 1ffff22a:	bd70      	pop	{r4, r5, r6, pc}
@@ -379,6 +400,8 @@
 1ffff2f4:	2001      	movs	r0, #1
 1ffff2f6:	4770      	bx	lr
 
+; read memory (et. al.) come here.
+
 1ffff2f8:	b530      	push	{r4, r5, lr}
 1ffff2fa:	2500      	movs	r5, #0
 1ffff2fc:	f7ff ff19 	bl	0x1ffff132
@@ -413,6 +436,12 @@
 ; *************
 ; "bootmain"
 ; *************
+;
+; One thing I don't see, and that is the usual lengthy
+; UART initialization with baud rate, stop bits, etc. etc.
+; It is almost as if it runs on defaults after reset.
+; supposedly some clever baud rate detection is done.
+; could it be done in hardware ??
 
 1ffff34c:	e92d 4ff0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
 1ffff350:	a140      	add	r1, pc, #256	; (adr r1, 0x454)
@@ -489,23 +518,32 @@
 1ffff3f2:	2079      	movs	r0, #121	; 0x79	ACK
 1ffff3f4:	f7ff fe18 	bl	0x1ffff028	; putc
 1ffff3f8:	4f0c      	ldr	r7, [pc, #48]	; (0x1ffff42c)
+
+; -------------------------------------------------
+; loop back here when command is finished. "NEXT"
+
 1ffff3fa:	4812      	ldr	r0, [pc, #72]	; (0x1ffff444) IWDG
 1ffff3fc:	f64a 21aa 	movw	r1, #43690	; 0xaaaa
 1ffff400:	6001      	str	r1, [r0, #0]
+
+; read a command (and its XOR compliment)
 1ffff402:	f7ff feee 	bl	0x1ffff1e2	; getc
 1ffff406:	4604      	mov	r4, r0
 1ffff408:	f7ff feeb 	bl	0x1ffff1e2	; getc
 1ffff40c:	ea80 0104 	eor.w	r1, r0, r4
 1ffff410:	29ff      	cmp	r1, #255	; 0xff
 1ffff412:	d000      	beq.n	0x1ffff416
-1ffff414:	2455      	movs	r4, #85	; 0x55
-1ffff416:	2c31      	cmp	r4, #49	; 0x31
+1ffff414:	2455      	movs	r4, #85		; 0x55 (bad cmd)
+1ffff416:	2c31      	cmp	r4, #49		; 0x31 << write flash/sram
 1ffff418:	d07e      	beq.n	0x1ffff518
-1ffff41a:	dc41      	bgt.n	0x1ffff4a0
-1ffff41c:	2c02      	cmp	r4, #2
+1ffff41a:	dc41      	bgt.n	0x1ffff4a0	; cmd > 0x31
+
+1ffff41c:	2c02      	cmp	r4, #2		; 0x02 << get chip ID
 1ffff41e:	d059      	beq.n	0x1ffff4d4
-1ffff420:	dc39      	bgt.n	0x1ffff496
-1ffff422:	b35c      	cbz	r4, 0x1ffff47c
+1ffff420:	dc39      	bgt.n	0x1ffff496	; cmd < 0x31
+
+; CBZ is compare and branch on zero
+1ffff422:	b35c      	cbz	r4, 0x1ffff47c	; cmd == 0 << get
 1ffff424:	2c01      	cmp	r4, #1
 1ffff426:	e02a      	b.n	0x1ffff47e
 
@@ -539,38 +577,49 @@
 1ffff474: 40010000		.word 0x40010000 	; afio
 1ffff478: 40013804		.word 0x40013804 	; uart data reg
 
+; "get" command (why bounce through here?)
 1ffff47c:	e021      	b.n	0x1ffff4c2
 
-1ffff47e:	d15a      	bne.n	0x1ffff536
+; "get2" (maybe)
+1ffff47e:	d15a      	bne.n	0x1ffff536	; NEXT w/ NACK
+; Yes it is get2
 1ffff480:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff482:	f7ff fdd1 	bl	0x1ffff028	; putc
-1ffff486:	2022      	movs	r0, #34	; 0x22
+1ffff486:	2022      	movs	r0, #34		; 0x22	-- version
 1ffff488:	f7ff fdce 	bl	0x1ffff028	; putc
 1ffff48c:	2000      	movs	r0, #0
 1ffff48e:	f7ff fdcb 	bl	0x1ffff028	; putc
 1ffff492:	2000      	movs	r0, #0
 1ffff494:	e028      	b.n	0x1ffff4e8
-1ffff496:	2c11      	cmp	r4, #17
+
+; Here with some command < 0x31
+
+1ffff496:	2c11      	cmp	r4, #17		; 0x11 << read memory
 1ffff498:	d02c      	beq.n	0x1ffff4f4
-1ffff49a:	2c21      	cmp	r4, #33	; 0x21
+1ffff49a:	2c21      	cmp	r4, #33		; 0x21 << jump
 1ffff49c:	d04d      	beq.n	0x1ffff53a
-1ffff49e:	e04a      	b.n	0x1ffff536
-1ffff4a0:	2c73      	cmp	r4, #115	; 0x73
+1ffff49e:	e04a      	b.n	0x1ffff536	; NEXT w/ NACK
+
+; Here with some command > 0x31
+
+1ffff4a0:	2c73      	cmp	r4, #115	; 0x73 << dis W prot
 1ffff4a2:	d06f      	beq.n	0x1ffff584
 1ffff4a4:	dc08      	bgt.n	0x1ffff4b8
-1ffff4a6:	2c43      	cmp	r4, #67	; 0x43
+1ffff4a6:	2c43      	cmp	r4, #67		; 0x43 << erase.
 1ffff4a8:	d06d      	beq.n	0x1ffff586
-1ffff4aa:	2c63      	cmp	r4, #99	; 0x63
-1ffff4ac:	d143      	bne.n	0x1ffff536
+1ffff4aa:	2c63      	cmp	r4, #99		; 0x63 << ena W prot
+1ffff4ac:	d143      	bne.n	0x1ffff536	; NEXT w/ NACK
 1ffff4ae:	f7ff fe40 	bl	0x1ffff132
 1ffff4b2:	2801      	cmp	r0, #1
 1ffff4b4:	d168      	bne.n	0x1ffff588
-1ffff4b6:	e03e      	b.n	0x1ffff536
-1ffff4b8:	2c82      	cmp	r4, #130	; 0x82 << Hmm
+1ffff4b6:	e03e      	b.n	0x1ffff536	; NEXT w/ NACK
+1ffff4b8:	2c82      	cmp	r4, #130	; 0x82 << ena read prot
 1ffff4ba:	d07e      	beq.n	0x1ffff5ba
-1ffff4bc:	2c92      	cmp	r4, #146	; 0x92 << AHA
+1ffff4bc:	2c92      	cmp	r4, #146	; 0x92 << dis read prot
 1ffff4be:	d07d      	beq.n	0x1ffff5bc
-1ffff4c0:	e039      	b.n	0x1ffff536
+1ffff4c0:	e039      	b.n	0x1ffff536	; NEXT w/ NACK
+
+; "get" command
 1ffff4c2:	2200      	movs	r2, #0
 1ffff4c4:	ab01      	add	r3, sp, #4
 1ffff4c6:	5c98      	ldrb	r0, [r3, r2]
@@ -578,7 +627,9 @@
 1ffff4cc:	1c52      	adds	r2, r2, #1
 1ffff4ce:	2a0f      	cmp	r2, #15
 1ffff4d0:	d3f9      	bcc.n	0x1ffff4c6
-1ffff4d2:	e792      	b.n	0x1ffff3fa
+1ffff4d2:	e792      	b.n	0x1ffff3fa	; NEXT
+
+; get chip ID
 1ffff4d4:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff4d6:	f7ff fda7 	bl	0x1ffff028	; putc
 1ffff4da:	2001      	movs	r0, #1
@@ -587,9 +638,13 @@
 1ffff4e2:	f7ff fda1 	bl	0x1ffff028	; putc
 1ffff4e6:	2010      	movs	r0, #16
 1ffff4e8:	f7ff fd9e 	bl	0x1ffff028	; putc
-1ffff4ec:	e0e6      	b.n	0x1ffff6bc
+1ffff4ec:	e0e6      	b.n	0x1ffff6bc	; NEXT w/ACK
+
+; folks branch here to return ACK or NACK (in r0)
 1ffff4ee:	f7ff fd9b 	bl	0x1ffff028	; putc
-1ffff4f2:	e782      	b.n	0x1ffff3fa
+1ffff4f2:	e782      	b.n	0x1ffff3fa	; NEXT
+
+; read memory
 1ffff4f4:	f7ff ff00 	bl	0x1ffff2f8
 1ffff4f8:	4684      	mov	ip, r0
 1ffff4fa:	f7ff fedf 	bl	0x1ffff2bc
@@ -602,8 +657,10 @@
 1ffff50c:	b2c5      	uxtb	r5, r0
 1ffff50e:	f7ff fe68 	bl	0x1ffff1e2	; getc
 1ffff512:	42a8      	cmp	r0, r5
-1ffff514:	d10f      	bne.n	0x1ffff536
+1ffff514:	d10f      	bne.n	0x1ffff536	; NEXT w/ NACK
 1ffff516:	e000      	b.n	0x1ffff51a
+
+; write flash/sram
 1ffff518:	e037      	b.n	0x1ffff58a
 1ffff51a:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff51c:	f7ff fd84 	bl	0x1ffff028	; putc
@@ -615,9 +672,13 @@
 1ffff52c:	f7ff fd7c 	bl	0x1ffff028	; putc
 1ffff530:	1e64      	subs	r4, r4, #1
 1ffff532:	d1f7      	bne.n	0x1ffff524
-1ffff534:	e761      	b.n	0x1ffff3fa
-1ffff536:	201f      	movs	r0, #31
-1ffff538:	e7d9      	b.n	0x1ffff4ee
+1ffff534:	e761      	b.n	0x1ffff3fa	; NEXT
+
+; Here to return NACK
+1ffff536:	201f      	movs	r0, #31		; 0x1f NACK
+1ffff538:	e7d9      	b.n	0x1ffff4ee	; NEXT w/ NACK
+
+; "jump" comes here
 1ffff53a:	f7ff fedd 	bl	0x1ffff2f8
 1ffff53e:	4604      	mov	r4, r0
 1ffff540:	f7ff febc 	bl	0x1ffff2bc
@@ -625,7 +686,7 @@
 1ffff546:	2902      	cmp	r1, #2
 1ffff548:	d001      	beq.n	0x1ffff54e
 1ffff54a:	2903      	cmp	r1, #3
-1ffff54c:	d1f3      	bne.n	0x1ffff536
+1ffff54c:	d1f3      	bne.n	0x1ffff536	; NEXT w/ NACK
 1ffff54e:	497e      	ldr	r1, [pc, #504]	; (0x1ffff748)	RCC
 1ffff550:	6848      	ldr	r0, [r1, #4]
 1ffff552:	4a7e      	ldr	r2, [pc, #504]	; (0x1ffff74c)
@@ -648,7 +709,7 @@
 1ffff57a:	6820      	ldr	r0, [r4, #0]
 1ffff57c:	f000 f90c 	bl	0x1ffff798
 1ffff580:	47a8      	blx	r5
-1ffff582:	e73a      	b.n	0x1ffff3fa
+1ffff582:	e73a      	b.n	0x1ffff3fa	; NEXT
 1ffff584:	e0bc      	b.n	0x1ffff700
 1ffff586:	e074      	b.n	0x1ffff672
 1ffff588:	e09a      	b.n	0x1ffff6c0
@@ -676,7 +737,7 @@
 1ffff5c6:	1d24      	adds	r4, r4, #4
 1ffff5c8:	f7ff fd45 	bl	0x1ffff056
 1ffff5cc:	0025      	movs	r5, r4
-1ffff5ce:	d075      	beq.n	0x1ffff6bc
+1ffff5ce:	d075      	beq.n	0x1ffff6bc	; NEXT w/ACK
 1ffff5d0:	eb09 0a04 	add.w	sl, r9, r4
 1ffff5d4:	eb08 0b04 	add.w	fp, r8, r4
 1ffff5d8:	ebaa 0005 	sub.w	r0, sl, r5
@@ -692,7 +753,7 @@
 1ffff5f4:	f004 04fc 	and.w	r4, r4, #252	; 0xfc
 1ffff5f8:	1d24      	adds	r4, r4, #4
 1ffff5fa:	0021      	movs	r1, r4
-1ffff5fc:	d05e      	beq.n	0x1ffff6bc
+1ffff5fc:	d05e      	beq.n	0x1ffff6bc	; NEXT w/ACK
 1ffff5fe:	eb09 0004 	add.w	r0, r9, r4
 1ffff602:	eb08 0204 	add.w	r2, r8, r4
 1ffff606:	1a43      	subs	r3, r0, r1
@@ -702,13 +763,13 @@
 1ffff60e:	1f09      	subs	r1, r1, #4
 1ffff610:	d1f9      	bne.n	0x1ffff606
 1ffff612:	f1bc 0f04 	cmp.w	ip, #4
-1ffff616:	d151      	bne.n	0x1ffff6bc
+1ffff616:	d151      	bne.n	0x1ffff6bc	; NEXT w/ACK
 
 ; get base address for option bytes.
 ; test the first one
 1ffff618:	484e      	ldr	r0, [pc, #312]	; (0x1ffff754)
 1ffff61a:	4580      	cmp	r8, r0
-1ffff61c:	d14e      	bne.n	0x1ffff6bc
+1ffff61c:	d14e      	bne.n	0x1ffff6bc	; NEXT w/ACK
 1ffff61e:	07e0      	lsls	r0, r4, #31
 1ffff620:	d002      	beq.n	0x1ffff628
 1ffff622:	f004 04fe 	and.w	r4, r4, #254	; 0xfe
@@ -738,7 +799,7 @@
 1ffff666:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff668:	f7ff fcde 	bl	0x1ffff028	; putc
 1ffff66c:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
-1ffff670:	e024      	b.n	0x1ffff6bc
+1ffff670:	e024      	b.n	0x1ffff6bc	; NEXT w/ACK
 1ffff672:	f7ff fd5e 	bl	0x1ffff132
 1ffff676:	2801      	cmp	r0, #1
 1ffff678:	f43f af11 	beq.w	0x1ffff49e
@@ -748,24 +809,27 @@
 1ffff686:	28ff      	cmp	r0, #255	; 0xff
 1ffff688:	d105      	bne.n	0x1ffff696
 1ffff68a:	f7ff fdaa 	bl	0x1ffff1e2	; getc
-1ffff68e:	b9a8      	cbnz	r0, 0x1ffff6bc
+1ffff68e:	b9a8      	cbnz	r0, 0x1ffff6bc	; NEXT w/ACK
 1ffff690:	f7ff fddd 	bl	0x1ffff24e
-1ffff694:	e012      	b.n	0x1ffff6bc
+1ffff694:	e012      	b.n	0x1ffff6bc	; NEXT w/ACK
 1ffff696:	ad05      	add	r5, sp, #20
 1ffff698:	1c44      	adds	r4, r0, #1
 1ffff69a:	4629      	mov	r1, r5
 1ffff69c:	f7ff fdaf 	bl	0x1ffff1fe
 1ffff6a0:	28aa      	cmp	r0, #170	; 0xaa
 1ffff6a2:	f47f aefc 	bne.w	0x1ffff49e
-1ffff6a6:	b14c      	cbz	r4, 0x1ffff6bc
+1ffff6a6:	b14c      	cbz	r4, 0x1ffff6bc	; NEXT w/ACK
 1ffff6a8:	f04f 6c00 	mov.w	ip, #134217728	; 0x8000000
 1ffff6ac:	f815 0b01 	ldrb.w	r0, [r5], #1
 1ffff6b0:	eb0c 2080 	add.w	r0, ip, r0, lsl #10
 1ffff6b4:	f7ff fdba 	bl	0x1ffff22c
 1ffff6b8:	1e64      	subs	r4, r4, #1
 1ffff6ba:	d1f7      	bne.n	0x1ffff6ac
+
+; folks come to return with ACK
 1ffff6bc:	2079      	movs	r0, #121	; 0x79 ACK
-1ffff6be:	e716      	b.n	0x1ffff4ee
+1ffff6be:	e716      	b.n	0x1ffff4ee	; NEXT w/ACK
+
 1ffff6c0:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff6c2:	f7ff fcb1 	bl	0x1ffff028	; putc
 1ffff6c6:	f7ff fd8c 	bl	0x1ffff1e2	; getc
@@ -810,7 +874,7 @@
 1ffff724:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff726:	f7ff fc7f 	bl	0x1ffff028	; putc
 1ffff72a:	f8c6 7d0c 	str.w	r7, [r6, #3340]	; 0xd0c
-1ffff72e:	e664      	b.n	0x1ffff3fa
+1ffff72e:	e664      	b.n	0x1ffff3fa	; NEXT
 
 ; Here to handle 0x92 (clear read protection)
 ; looks like it writes zeros to the area

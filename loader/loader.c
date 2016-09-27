@@ -66,7 +66,7 @@ void error ( char * );
 #define STM_WPRO	0x63	/* write protect specified sectors */
 #define STM_UNPROTECT	0x73	/* disable write protect for all sectors */
 
-/* Mentioned in AN3155, not supported by my device */
+/* Mentioned in AN3155, and supported by my device! */
 #define STM_RPRO	0x82	/* enable readout protection */
 #define STM_RPRO_DIS	0x92	/* disable readout protection */
 
