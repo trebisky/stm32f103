@@ -14,12 +14,12 @@
 ;  impossible to brick one of these devices.
 ;
 ; Note that there is another area called the "options bytes".
+;  This is discussed in detail in PM0075
 ;  I was able to dump this area (512 bytes in size)
-;  I am on the lookout for it in this code ...
 ;    dump_image options.bin 0x1ffff800 0x200
-; A google search on "stm32f103 options bytes" turns up some
-;  information, but this aspect of the chip seems to be
-:  shrouded in mystery....
+;  only the first 16 bytes of this area are used.
+;  and there are 8 option bytes
+;   (they are stored at the byte and complement
 ; 
 ; The boot firmware occupied 2K in the "system memory".
 ;  A side note on thumb compression.
@@ -72,7 +72,6 @@
 ;  #define STM_RPRO		0x82	/* enable readout protection */
 ;  #define STM_RPRO_DIS		0x92	/* disable readout protection */
     
-
 1ffff000: 200001fc		.word 0x200001fc 	; initial stack
 1ffff004: 1ffff021		.word 0x1ffff021 	; reset
 1ffff008: 1ffff765		.word 0x1ffff765 	; NMI
@@ -118,11 +117,29 @@ really makes no sense at all.
 1ffff03c:	6008      	str	r0, [r1, #0]
 1ffff03e:	4770      	bx	lr
 
+; The following are utility routines involving the flash controller
+; the controller looks like so:
+;	00 = acr
+;	04 = keyr
+;	08 = opt_keyr
+;	0c = sr
+;	10 = cr
+;	14 = AR
+;	18 = --unused--
+;	1c = obr
+;	20 = wrpr
+
+; spin until BSY bit in SR goes clear
+
 1ffff040:	48fc      	ldr	r0, [pc, #1008]	; (0x1ffff434) flash
-1ffff042:	68c1      	ldr	r1, [r0, #12]
-1ffff044:	07c9      	lsls	r1, r1, #31
+1ffff042:	68c1      	ldr	r1, [r0, #12]	; read flash SR
+1ffff044:	07c9      	lsls	r1, r1, #31	; 
 1ffff046:	d1fc      	bne.n	0x1ffff042
 1ffff048:	4770      	bx	lr
+
+; write magic keys to OPTKEYR to unlock option bytes
+; 1ffff438: 45670123		.word 0x45670123  KEY1
+; 1ffff43c: cdef89ab		.word 0xcdef89ab  KEY2
 
 1ffff04a:	48fa      	ldr	r0, [pc, #1000]	; (0x1ffff434) flash
 1ffff04c:	49fa      	ldr	r1, [pc, #1000]	; (0x1ffff438)
@@ -131,6 +148,7 @@ really makes no sense at all.
 1ffff052:	6081      	str	r1, [r0, #8]
 1ffff054:	4770      	bx	lr
 
+; write magic keys to KEYR to unlock flash controller
 1ffff056:	48f7      	ldr	r0, [pc, #988]	; (0x1ffff434) flash
 1ffff058:	49f7      	ldr	r1, [pc, #988]	; (0x1ffff438)
 1ffff05a:	6041      	str	r1, [r0, #4]
@@ -138,27 +156,30 @@ really makes no sense at all.
 1ffff05e:	6041      	str	r1, [r0, #4]
 1ffff060:	4770      	bx	lr
 
+; perform option byte erase
 1ffff062:	b500      	push	{lr}
-1ffff064:	f7ff fff7 	bl	0x1ffff056
-1ffff068:	f7ff ffef 	bl	0x1ffff04a
-1ffff06c:	f7ff ffe8 	bl	0x1ffff040
+1ffff064:	f7ff fff7 	bl	0x1ffff056	; unlock flash
+1ffff068:	f7ff ffef 	bl	0x1ffff04a	; unlock options
+1ffff06c:	f7ff ffe8 	bl	0x1ffff040	; wait until idle
 1ffff070:	4af0      	ldr	r2, [pc, #960]	; (0x1ffff434) flash
-1ffff072:	6910      	ldr	r0, [r2, #16]
-1ffff074:	f040 0020 	orr.w	r0, r0, #32
+1ffff072:	6910      	ldr	r0, [r2, #16]	; read flash CR
+1ffff074:	f040 0020 	orr.w	r0, r0, #32	; set bit 0x20 (OPTER)
 1ffff078:	6110      	str	r0, [r2, #16]
 1ffff07a:	6910      	ldr	r0, [r2, #16]
-1ffff07c:	f040 0040 	orr.w	r0, r0, #64	; 0x40
+1ffff07c:	f040 0040 	orr.w	r0, r0, #64	; set bit 0x40 (START)
 1ffff080:	6110      	str	r0, [r2, #16]
-1ffff082:	f7ff ffdd 	bl	0x1ffff040
+1ffff082:	f7ff ffdd 	bl	0x1ffff040	; wait until idle
 1ffff086:	6910      	ldr	r0, [r2, #16]
-1ffff088:	f020 0020 	bic.w	r0, r0, #32
+1ffff088:	f020 0020 	bic.w	r0, r0, #32	; clear bit 0x20
 1ffff08c:	6110      	str	r0, [r2, #16]
 1ffff08e:	bd00      	pop	{pc}
 
 ; called to handle 0x82 and 0x92
+; enable or disable readout protection
 1ffff090:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
 1ffff094:	4682      	mov	sl, r0
-1ffff096:	f7ff ffd3 	bl	0x1ffff040
+1ffff096:	f7ff ffd3 	bl	0x1ffff040	; wait until idle
+
 ; set r3 = 1ffff802 (in option bytes)
 1ffff09a:	4be9      	ldr	r3, [pc, #932]	; (0x1ffff440)
 1ffff09c:	f8b3 8000 	ldrh.w	r8, [r3]
@@ -214,15 +235,17 @@ really makes no sense at all.
 ; a return
 1ffff12e:	e8bd 87f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, pc}
 
+; call this is_rdprt().
+;  it returns 1 if the RDPRT bit is set (read protection is in place).
 ; many calls to here.
-; some kind of check before dorking with flash
+; Check RDPRT bit in the options
 ; if this returns 1, the caller gives up with NACK
 ; if this returns 0, the caller has the green light
 1ffff132:	49c0      	ldr	r1, [pc, #768]	; (0x1ffff434) flash
 1ffff134:	2000      	movs	r0, #0
-1ffff136:	69c9      	ldr	r1, [r1, #28]
+1ffff136:	69c9      	ldr	r1, [r1, #28]	; read OBR
 1ffff138:	0789      	lsls	r1, r1, #30
-1ffff13a:	d500      	bpl.n	0x1ffff13e
+1ffff13a:	d500      	bpl.n	0x1ffff13e	; RDPRT bit
 1ffff13c:	2001      	movs	r0, #1
 1ffff13e:	4770      	bx	lr
 
@@ -409,7 +432,7 @@ really makes no sense at all.
 
 1ffff2f8:	b530      	push	{r4, r5, lr}
 1ffff2fa:	2500      	movs	r5, #0
-1ffff2fc:	f7ff ff19 	bl	0x1ffff132
+1ffff2fc:	f7ff ff19 	bl	0x1ffff132	; isRDPRT?
 1ffff300:	b9f0      	cbnz	r0, 0x1ffff340
 1ffff302:	2079      	movs	r0, #121	; 0x79 ACK
 1ffff304:	f7ff fe90 	bl	0x1ffff028	; putc
@@ -617,7 +640,7 @@ really makes no sense at all.
 1ffff4ac:	d143      	bne.n	0x1ffff536	; NEXT w/ NACK
 
 ; enable write protection
-1ffff4ae:	f7ff fe40 	bl	0x1ffff132
+1ffff4ae:	f7ff fe40 	bl	0x1ffff132	; isRDPRT?
 1ffff4b2:	2801      	cmp	r0, #1
 1ffff4b4:	d168      	bne.n	0x1ffff588	; enable W prot
 1ffff4b6:	e03e      	b.n	0x1ffff536	; NEXT w/ NACK
@@ -819,7 +842,7 @@ really makes no sense at all.
 1ffff670:	e024      	b.n	0x1ffff6bc	; NEXT w/ACK
 
 ; erase flash
-1ffff672:	f7ff fd5e 	bl	0x1ffff132
+1ffff672:	f7ff fd5e 	bl	0x1ffff132	; isRDPRT?
 1ffff676:	2801      	cmp	r0, #1
 1ffff678:	f43f af11 	beq.w	0x1ffff49e
 1ffff67c:	2079      	movs	r0, #121	; 0x79 ACK
@@ -876,7 +899,7 @@ really makes no sense at all.
 1ffff6fe:	e011      	b.n	0x1ffff724
 
 ; disable write protection
-1ffff700:	f7ff fd17 	bl	0x1ffff132
+1ffff700:	f7ff fd17 	bl	0x1ffff132	; isRDPRT?
 1ffff704:	2801      	cmp	r0, #1
 1ffff706:	d0b7      	beq.n	0x1ffff678	; erase flash ...
 1ffff708:	2079      	movs	r0, #121	; 0x79 ACK
@@ -884,7 +907,7 @@ really makes no sense at all.
 1ffff70e:	e019      	b.n	0x1ffff744
 
 ; Here to handle 0x82 (set read protection)
-1ffff710:	f7ff fd0f 	bl	0x1ffff132
+1ffff710:	f7ff fd0f 	bl	0x1ffff132	; isRDPRT?
 1ffff714:	2801      	cmp	r0, #1
 1ffff716:	d0af      	beq.n	0x1ffff678
 1ffff718:	2079      	movs	r0, #121	; 0x79 ACK
