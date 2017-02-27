@@ -180,8 +180,7 @@ really makes no sense at all.
 1ffff094:	4682      	mov	sl, r0
 1ffff096:	f7ff ffd3 	bl	0x1ffff040	; wait until idle
 
-; set r3 = 1ffff802 (in option bytes)
-1ffff09a:	4be9      	ldr	r3, [pc, #932]	; (0x1ffff440)
+1ffff09a:	4be9      	ldr	r3, [pc, #932]	; (0x1ffff440) --> 1ffff802
 1ffff09c:	f8b3 8000 	ldrh.w	r8, [r3]
 1ffff0a0:	885c      	ldrh	r4, [r3, #2]
 1ffff0a2:	889d      	ldrh	r5, [r3, #4]
@@ -189,45 +188,51 @@ really makes no sense at all.
 1ffff0a6:	891f      	ldrh	r7, [r3, #8]
 1ffff0a8:	f8b3 c00a 	ldrh.w	ip, [r3, #10]
 1ffff0ac:	f8b3 900c 	ldrh.w	r9, [r3, #12]
-1ffff0b0:	f6a3 0302 	subw	r3, r3, #2050	; 0x802
-1ffff0b4:	f7ff ffd5 	bl	0x1ffff062
-1ffff0b8:	f7ff ffcd 	bl	0x1ffff056
-1ffff0bc:	f7ff ffc5 	bl	0x1ffff04a
-1ffff0c0:	f7ff ffbe 	bl	0x1ffff040
-1ffff0c4:	4adb      	ldr	r2, [pc, #876]	; (0x1ffff434) flash
-1ffff0c6:	6910      	ldr	r0, [r2, #16]
-1ffff0c8:	f040 0010 	orr.w	r0, r0, #16
+1ffff0b0:	f6a3 0302 	subw	r3, r3, #2050	; 0x802  --> 1ffff000
+
+1ffff0b4:	f7ff ffd5 	bl	0x1ffff062	; option byte erase
+1ffff0b8:	f7ff ffcd 	bl	0x1ffff056	; unlock flash
+1ffff0bc:	f7ff ffc5 	bl	0x1ffff04a	; unlock option bytes
+1ffff0c0:	f7ff ffbe 	bl	0x1ffff040	; wait until idle
+
+1ffff0c4:	4adb      	ldr	r2, [pc, #876]	; (0x1ffff434) flash base
+1ffff0c6:	6910      	ldr	r0, [r2, #16]	; CR register
+1ffff0c8:	f040 0010 	orr.w	r0, r0, #16	; set option byte programming
 1ffff0cc:	6110      	str	r0, [r2, #16]
 1ffff0ce:	f1ba 0f00 	cmp.w	sl, #0
 1ffff0d2:	d023      	beq.n	0x1ffff11c
 1ffff0d4:	f008 00ff 	and.w	r0, r8, #255	; 0xff
-1ffff0d8:	f503 6300 	add.w	r3, r3, #2048	; 0x800
+
+; strh is "store halfword"
+; uxtb is "extend byte to 32 bit value"
+
+1ffff0d8:	f503 6300 	add.w	r3, r3, #2048	; 0x800 --> 1ffff800
 1ffff0dc:	8058      	strh	r0, [r3, #2]
-1ffff0de:	f7ff ffaf 	bl	0x1ffff040
+1ffff0de:	f7ff ffaf 	bl	0x1ffff040	; wait until idle
 1ffff0e2:	b2e0      	uxtb	r0, r4
 1ffff0e4:	8098      	strh	r0, [r3, #4]
-1ffff0e6:	f7ff ffab 	bl	0x1ffff040
+1ffff0e6:	f7ff ffab 	bl	0x1ffff040	; wait until idle
 1ffff0ea:	b2e8      	uxtb	r0, r5
 1ffff0ec:	80d8      	strh	r0, [r3, #6]
-1ffff0ee:	f7ff ffa7 	bl	0x1ffff040
+1ffff0ee:	f7ff ffa7 	bl	0x1ffff040	; wait until idle
 1ffff0f2:	b2f0      	uxtb	r0, r6
 1ffff0f4:	8118      	strh	r0, [r3, #8]
-1ffff0f6:	f7ff ffa3 	bl	0x1ffff040
+1ffff0f6:	f7ff ffa3 	bl	0x1ffff040	; wait until idle
 1ffff0fa:	b2f8      	uxtb	r0, r7
 1ffff0fc:	8118      	strh	r0, [r3, #8]
-1ffff0fe:	f7ff ff9f 	bl	0x1ffff040
+1ffff0fe:	f7ff ff9f 	bl	0x1ffff040	; wait until idle
 1ffff102:	f00c 00ff 	and.w	r0, ip, #255	; 0xff
 1ffff106:	8118      	strh	r0, [r3, #8]
-1ffff108:	f7ff ff9a 	bl	0x1ffff040
+1ffff108:	f7ff ff9a 	bl	0x1ffff040	; wait until idle
 1ffff10c:	f009 00ff 	and.w	r0, r9, #255	; 0xff
 1ffff110:	8118      	strh	r0, [r3, #8]
-1ffff112:	f7ff ff95 	bl	0x1ffff040
+1ffff112:	f7ff ff95 	bl	0x1ffff040	; wait until idle
 1ffff116:	2000      	movs	r0, #0
 1ffff118:	8018      	strh	r0, [r3, #0]
 1ffff11a:	e002      	b.n	0x1ffff122
 1ffff11c:	20a5      	movs	r0, #165	; 0xa5
 1ffff11e:	f8a3 0800 	strh.w	r0, [r3, #2048]	; 0x800
-1ffff122:	f7ff ff8d 	bl	0x1ffff040
+1ffff122:	f7ff ff8d 	bl	0x1ffff040	; wait until idle
 1ffff126:	6910      	ldr	r0, [r2, #16]
 1ffff128:	f020 0010 	bic.w	r0, r0, #16
 1ffff12c:	6110      	str	r0, [r2, #16]
@@ -262,42 +267,42 @@ really makes no sense at all.
 1ffff15a:	f3c0 2507 	ubfx	r5, r0, #8, #8
 1ffff15e:	f3c0 4607 	ubfx	r6, r0, #16, #8
 1ffff162:	ea4f 6a10 	mov.w	sl, r0, lsr #24
-1ffff166:	f7ff ff7c 	bl	0x1ffff062
-1ffff16a:	f7ff ff74 	bl	0x1ffff056
-1ffff16e:	f7ff ff6c 	bl	0x1ffff04a
+1ffff166:	f7ff ff7c 	bl	0x1ffff062	; option byte erase
+1ffff16a:	f7ff ff74 	bl	0x1ffff056	; unlock flash
+1ffff16e:	f7ff ff6c 	bl	0x1ffff04a	; unlock option bytes
 1ffff172:	4ab0      	ldr	r2, [pc, #704]	; (0x1ffff434) flash
 1ffff174:	6910      	ldr	r0, [r2, #16]
 1ffff176:	f040 0010 	orr.w	r0, r0, #16
 1ffff17a:	6110      	str	r0, [r2, #16]
 1ffff17c:	b2f8      	uxtb	r0, r7
 1ffff17e:	8018      	strh	r0, [r3, #0]
-1ffff180:	f7ff ff5e 	bl	0x1ffff040
+1ffff180:	f7ff ff5e 	bl	0x1ffff040	; wait until idle
 1ffff184:	f00c 00ff 	and.w	r0, ip, #255	; 0xff
 1ffff188:	8058      	strh	r0, [r3, #2]
-1ffff18a:	f7ff ff59 	bl	0x1ffff040
+1ffff18a:	f7ff ff59 	bl	0x1ffff040	; wait until idle
 1ffff18e:	f008 00ff 	and.w	r0, r8, #255	; 0xff
 1ffff192:	8098      	strh	r0, [r3, #4]
-1ffff194:	f7ff ff54 	bl	0x1ffff040
+1ffff194:	f7ff ff54 	bl	0x1ffff040	; wait until idle
 1ffff198:	f009 00ff 	and.w	r0, r9, #255	; 0xff
 1ffff19c:	80d8      	strh	r0, [r3, #6]
 1ffff19e:	f5a3 6300 	sub.w	r3, r3, #2048	; 0x800
-1ffff1a2:	f7ff ff4d 	bl	0x1ffff040
+1ffff1a2:	f7ff ff4d 	bl	0x1ffff040	; wait until idle
 1ffff1a6:	2cff      	cmp	r4, #255	; 0xff
 1ffff1a8:	d003      	beq.n	0x1ffff1b2
 1ffff1aa:	f8a3 4808 	strh.w	r4, [r3, #2056]	; 0x808
-1ffff1ae:	f7ff ff47 	bl	0x1ffff040
+1ffff1ae:	f7ff ff47 	bl	0x1ffff040	; wait until idle
 1ffff1b2:	2dff      	cmp	r5, #255	; 0xff
 1ffff1b4:	d003      	beq.n	0x1ffff1be
 1ffff1b6:	f8a3 580a 	strh.w	r5, [r3, #2058]	; 0x80a
-1ffff1ba:	f7ff ff41 	bl	0x1ffff040
+1ffff1ba:	f7ff ff41 	bl	0x1ffff040	; wait until idle
 1ffff1be:	2eff      	cmp	r6, #255	; 0xff
 1ffff1c0:	d003      	beq.n	0x1ffff1ca
 1ffff1c2:	f8a3 680c 	strh.w	r6, [r3, #2060]	; 0x80c
-1ffff1c6:	f7ff ff3b 	bl	0x1ffff040
+1ffff1c6:	f7ff ff3b 	bl	0x1ffff040	; wait until idle
 1ffff1ca:	f1ba 0fff 	cmp.w	sl, #255	; 0xff
 1ffff1ce:	d003      	beq.n	0x1ffff1d8
 1ffff1d0:	f8a3 a80e 	strh.w	sl, [r3, #2062]	; 0x80e
-1ffff1d4:	f7ff ff34 	bl	0x1ffff040
+1ffff1d4:	f7ff ff34 	bl	0x1ffff040	; wait until idle
 1ffff1d8:	6910      	ldr	r0, [r2, #16]
 1ffff1da:	f020 0010 	bic.w	r0, r0, #16
 1ffff1de:	6110      	str	r0, [r2, #16]
@@ -343,22 +348,22 @@ really makes no sense at all.
 1ffff22a:	bd70      	pop	{r4, r5, r6, pc}
 1ffff22c:	b500      	push	{lr}
 1ffff22e:	4603      	mov	r3, r0
-1ffff230:	f7ff ff11 	bl	0x1ffff056
-1ffff234:	f7ff ff04 	bl	0x1ffff040
+1ffff230:	f7ff ff11 	bl	0x1ffff056	; unlock flash
+1ffff234:	f7ff ff04 	bl	0x1ffff040	; wait until idle
 1ffff238:	4a7e      	ldr	r2, [pc, #504]	; (0x1ffff434) flash
 1ffff23a:	2002      	movs	r0, #2
 1ffff23c:	6110      	str	r0, [r2, #16]
 1ffff23e:	6153      	str	r3, [r2, #20]
 1ffff240:	2042      	movs	r0, #66	; 0x42
 1ffff242:	6110      	str	r0, [r2, #16]
-1ffff244:	f7ff fefc 	bl	0x1ffff040
+1ffff244:	f7ff fefc 	bl	0x1ffff040	; wait until idle
 1ffff248:	2000      	movs	r0, #0
 1ffff24a:	6110      	str	r0, [r2, #16]
 1ffff24c:	bd00      	pop	{pc}
 1ffff24e:	b500      	push	{lr}
-1ffff250:	f7ff ff01 	bl	0x1ffff056
-1ffff254:	f7ff fef9 	bl	0x1ffff04a
-1ffff258:	f7ff fef2 	bl	0x1ffff040
+1ffff250:	f7ff ff01 	bl	0x1ffff056	; unlock flash
+1ffff254:	f7ff fef9 	bl	0x1ffff04a	; unlock option bytes
+1ffff258:	f7ff fef2 	bl	0x1ffff040	; wait until idle
 1ffff25c:	4a75      	ldr	r2, [pc, #468]	; (0x1ffff434) flash
 1ffff25e:	6910      	ldr	r0, [r2, #16]
 1ffff260:	f040 0004 	orr.w	r0, r0, #4
@@ -366,7 +371,7 @@ really makes no sense at all.
 1ffff266:	6910      	ldr	r0, [r2, #16]
 1ffff268:	f040 0040 	orr.w	r0, r0, #64	; 0x40
 1ffff26c:	6110      	str	r0, [r2, #16]
-1ffff26e:	f7ff fee7 	bl	0x1ffff040
+1ffff26e:	f7ff fee7 	bl	0x1ffff040	; wait until idle
 1ffff272:	6910      	ldr	r0, [r2, #16]
 1ffff274:	f020 0004 	bic.w	r0, r0, #4
 1ffff278:	6110      	str	r0, [r2, #16]
@@ -374,19 +379,19 @@ really makes no sense at all.
 1ffff27c:	b510      	push	{r4, lr}
 1ffff27e:	4604      	mov	r4, r0
 1ffff280:	460b      	mov	r3, r1
-1ffff282:	f7ff fedd 	bl	0x1ffff040
+1ffff282:	f7ff fedd 	bl	0x1ffff040	; wait until idle
 1ffff286:	4a6b      	ldr	r2, [pc, #428]	; (0x1ffff434) flash
 1ffff288:	6910      	ldr	r0, [r2, #16]
 1ffff28a:	f040 0001 	orr.w	r0, r0, #1
 1ffff28e:	6110      	str	r0, [r2, #16]
 1ffff290:	8023      	strh	r3, [r4, #0]
-1ffff292:	f7ff fed5 	bl	0x1ffff040
+1ffff292:	f7ff fed5 	bl	0x1ffff040	; wait until idle
 1ffff296:	68d0      	ldr	r0, [r2, #12]
 1ffff298:	0740      	lsls	r0, r0, #29
 1ffff29a:	d403      	bmi.n	0x1ffff2a4
 1ffff29c:	0c18      	lsrs	r0, r3, #16
 1ffff29e:	8060      	strh	r0, [r4, #2]
-1ffff2a0:	f7ff fece 	bl	0x1ffff040
+1ffff2a0:	f7ff fece 	bl	0x1ffff040	; wait until idle
 1ffff2a4:	68d0      	ldr	r0, [r2, #12]
 1ffff2a6:	0740      	lsls	r0, r0, #29
 1ffff2a8:	d503      	bpl.n	0x1ffff2b2
@@ -775,7 +780,7 @@ really makes no sense at all.
 1ffff5c0:	d002      	beq.n	0x1ffff5c8
 1ffff5c2:	f004 04fc 	and.w	r4, r4, #252	; 0xfc
 1ffff5c6:	1d24      	adds	r4, r4, #4
-1ffff5c8:	f7ff fd45 	bl	0x1ffff056
+1ffff5c8:	f7ff fd45 	bl	0x1ffff056	; unlock flash
 1ffff5cc:	0025      	movs	r5, r4
 1ffff5ce:	d075      	beq.n	0x1ffff6bc	; NEXT w/ACK
 1ffff5d0:	eb09 0a04 	add.w	sl, r9, r4
@@ -814,14 +819,14 @@ really makes no sense at all.
 1ffff620:	d002      	beq.n	0x1ffff628
 1ffff622:	f004 04fe 	and.w	r4, r4, #254	; 0xfe
 1ffff626:	1ca4      	adds	r4, r4, #2
-1ffff628:	f7ff fd1b 	bl	0x1ffff062
-1ffff62c:	f7ff fd13 	bl	0x1ffff056
-1ffff630:	f7ff fd0b 	bl	0x1ffff04a
+1ffff628:	f7ff fd1b 	bl	0x1ffff062	; option byte erase
+1ffff62c:	f7ff fd13 	bl	0x1ffff056	; unlock flash
+1ffff630:	f7ff fd0b 	bl	0x1ffff04a	; unlock option bytes
 1ffff634:	4b48      	ldr	r3, [pc, #288]	; (0x1ffff758) flash
 1ffff636:	6918      	ldr	r0, [r3, #16]
 1ffff638:	f040 0010 	orr.w	r0, r0, #16
 1ffff63c:	6118      	str	r0, [r3, #16]
-1ffff63e:	f7ff fcff 	bl	0x1ffff040
+1ffff63e:	f7ff fcff 	bl	0x1ffff040	; wait until idle
 1ffff642:	b164      	cbz	r4, 0x1ffff65e
 1ffff644:	eb09 0204 	add.w	r2, r9, r4
 1ffff648:	eb08 0504 	add.w	r5, r8, r4
@@ -830,7 +835,7 @@ really makes no sense at all.
 1ffff650:	1b29      	subs	r1, r5, r4
 1ffff652:	b2c0      	uxtb	r0, r0
 1ffff654:	8008      	strh	r0, [r1, #0]
-1ffff656:	f7ff fcf3 	bl	0x1ffff040
+1ffff656:	f7ff fcf3 	bl	0x1ffff040	; wait until idle
 1ffff65a:	1ea4      	subs	r4, r4, #2
 1ffff65c:	d1f6      	bne.n	0x1ffff64c
 1ffff65e:	6918      	ldr	r0, [r3, #16]
@@ -890,7 +895,7 @@ really makes no sense at all.
 1ffff6e8:	4302      	orrs	r2, r0
 1ffff6ea:	1e64      	subs	r4, r4, #1
 1ffff6ec:	d1f8      	bne.n	0x1ffff6e0
-1ffff6ee:	f7ff fcb2 	bl	0x1ffff056
+1ffff6ee:	f7ff fcb2 	bl	0x1ffff056	; unlock flash
 1ffff6f2:	4819      	ldr	r0, [pc, #100]	; (0x1ffff758) flash
 1ffff6f4:	2135      	movs	r1, #53	; 0x35
 1ffff6f6:	60c1      	str	r1, [r0, #12]

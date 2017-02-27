@@ -1,4 +1,7 @@
 #!/bin/sh
 # These are proper file locations for Fedora 24
+#  and for Fedora 25
+# On F25, do "dnf install openocd" to get this.
+# 2-26-2017
 
 openocd -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg

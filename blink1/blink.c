@@ -42,10 +42,16 @@ struct gpio {
 #define CONF_GP_OD	0x4	/* Open drain */
 
 /* This gives a blink rate of about 2.7 Hz */
+/* i.e. the delay time is about 0.2 seconds (200 ms) */
+#define FAST	200
+
+#define FASTER	50
+#define SLOWER	400
+
 void
 delay ( void )
 {
-	volatile int count = 1000 * 200;
+	volatile int count = 1000 * FAST;
 
 	while ( count-- )
 	    ;
