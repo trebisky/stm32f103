@@ -15,21 +15,19 @@ minimal bit of code along with a Makefile.
 And 3 months later I find myself trying to remember how to do
 this (namely flash the image).  Using Fedora 25
 
-dnf install arm-none-eabi-gcc-cs
+    dnf install arm-none-eabi-gcc-cs
 
-dnf install openocd
+    dnf install openocd
 
-make clean
+    make clean
 
-make
+    make
 
-then
-
-Connect the ST link to the STM32 unit.
+Then connect the ST link to the STM32 unit.
 
     This supplies power
 
-Then I open up two extra terminal windows.
+I then open up two extra terminal windows.
 
 In one I run openocd by typing:
 
