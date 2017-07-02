@@ -19,7 +19,7 @@ GDB = $(TOOLS)-gdb
 
 OBJS = locore.o blink.o
 
-all: blink.bin blink.dump
+all: blink.elf blink.dump
 
 blink.dump:	blink.elf
 	$(DUMP) blink.elf >blink.dump
@@ -36,6 +36,7 @@ locore.o:	locore.s
 blink.o:	blink.c
 	$(CC) -c blink.c
 
+# the following is OBSOLETE !!!
 # To burn the image:
 #  Connect the STLINK gadget to the target.
 #  Be sure and start openOCD in this directory.
@@ -43,9 +44,23 @@ blink.o:	blink.c
 #  Then use "make flash" to start an openocd console session.
 #  Type: reset halt
 #  Type: flash write_image erase blink.bin 0x08000000
-flash:
+xflash:
 	@echo "type: flash write_image erase blink.bin 0x08000000"
 	telnet localhost 4444
+
+OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
+
+# This is way slicker -- run openocd from the command line
+bflash:	blink.bin
+	openocd $(OCDCFG) -c "program blink.bin verify reset exit 0x08000000"
+#	openocd $(OCDCFG) -c "program blink.bin reset exit 0x08000000"
+
+# This works great once I fixed the base address in the LDS file
+
+flash:	blink.elf
+	openocd $(OCDCFG) -c "program blink.elf verify reset exit"
+#	openocd $(OCDCFG) -c "program blink.elf reset exit"
+
 gdb:
 	$(GDB) --eval-command="target remote localhost:3333" blink.elf
 

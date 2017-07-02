@@ -63,11 +63,23 @@ struct gpio {
 #define CONF_GP_UD	0x0	/* Pull up/down */
 #define CONF_GP_OD	0x4	/* Open drain */
 
-/* This gives a blink rate of about 2.7 Hz */
+/* By itself, this gives a blink rate of about 2.7 Hz
+ *  so the delay is about 185 ms
+ */
 void
 delay ( void )
 {
 	volatile int count = 1000 * 200;
+
+	while ( count-- )
+	    ;
+}
+
+/* We scale the above to try to get a 500 ms delay */
+void
+big_delay ( void )
+{
+	volatile int count = 1000 * 540;
 
 	while ( count-- )
 	    ;
@@ -101,27 +113,36 @@ led_init ( int bit )
 void
 led_on ( void )
 {
-	GPIOC_p->bsrr = on_mask;
+	/* Oops */
+	GPIOC_p->bsrr = off_mask;
 }
 
 void
 led_off ( void )
 {
-	GPIOC_p->bsrr = off_mask;
+	/* Oops */
+	GPIOC_p->bsrr = on_mask;
 }
 
 #define PC13	13
 
+#define NBLINKS		5
 void
 startup ( void )
 {
+	int i;
+
 	led_init ( PC13 );
 
 	for ( ;; ) {
-	    led_on ();
-	    delay ();
-	    led_off ();
-	    delay ();
+	    for ( i=0; i<NBLINKS; i++ ) {
+		led_on ();
+		delay ();
+		led_off ();
+		delay ();
+	    }
+
+	    big_delay ();
 	}
 }
 
