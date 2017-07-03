@@ -4,22 +4,6 @@
  * Driver for the STM32F103 usart
  */
 
-/* The reset and clock control module */
-struct rcc {
-	volatile unsigned long rc;	/* 0 - clock control */
-	volatile unsigned long cfg;	/* 4 - clock config */
-	volatile unsigned long cir;	/* 8 - clock interrupt */
-	volatile unsigned long apb2;	/* c - peripheral reset */
-	volatile unsigned long apb1;	/* 10 - peripheral reset */
-	volatile unsigned long ape3;	/* 14 - peripheral enable */
-	volatile unsigned long ape2;	/* 18 - peripheral enable */
-	volatile unsigned long ape1;	/* 1c - peripheral enable */
-	volatile unsigned long bdcr;	/* 20 - xx */
-	volatile unsigned long csr;	/* 24 - xx */
-};
-
-#define RCC_BASE	(struct rcc *) 0x40021000
-
 /* One of the 3 usarts */
 struct usart {
 	volatile unsigned long status;
@@ -34,5 +18,32 @@ struct usart {
 #define USART1_BASE	(struct usart *) 0x40013800
 #define USART2_BASE	(struct usart *) 0x40004400
 #define USART3_BASE	(struct usart *) 0x40004800
+
+/* bits in the status register */
+#define	ST_PE		0x0001
+#define	ST_FE		0x0002
+#define	ST_NE		0x0004
+#define	ST_OVER		0x0008
+#define	ST_IDLE		0x0010
+#define	ST_RXNE		0x0020		/* Receiver not empty */
+#define	ST_TC		0x0040		/* Transmission complete */
+#define	ST_TXE		0x0080		/* Transmitter empty */
+#define	ST_BREAK	0x0100
+#define	ST_CTS		0x0200
+
+void
+serial_init ( void )
+{
+}
+
+void
+serial_putc ( int c )
+{
+	struct usart *up = USART1_BASE;
+
+	while ( ! (up->status & ST_TXE) )
+	    ;
+	up->data = c;
+}
 
 /* THE END */

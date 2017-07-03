@@ -1,10 +1,9 @@
-/* talk.c
+/* blink.c
  * (c) Tom Trebisky  7-2-2017
  *
  */
 
 void rcc_init ( void );
-void serial_init ( void );
 void led_init ( int );
 
 void led_on ( void );
@@ -42,7 +41,6 @@ startup ( void )
 	int i;
 
 	rcc_init ();
-	serial_init ();
 
 	led_init ( PC13 );
 
