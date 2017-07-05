@@ -4,7 +4,6 @@
  */
 
 void rcc_init ( void );
-void serial_init ( void );
 void led_init ( int );
 
 void led_on ( void );
@@ -33,18 +32,22 @@ big_delay ( void )
 }
 
 #define PC13	13
+#define NBLINKS		2
 
-#define NBLINKS		3
+/* Turn the LED on for a pulse */
+static void
+led_show ( void )
+{
+	led_on ();
+	delay ();
+	led_off ();
+}
 
-void
-startup ( void )
+static void
+led_demo ( void )
 {
 	int i;
 
-	rcc_init ();
-	serial_init ();
-
-	led_init ( PC13 );
 
 	for ( ;; ) {
 	    for ( i=0; i<NBLINKS; i++ ) {
@@ -55,6 +58,24 @@ startup ( void )
 	    }
 
 	    big_delay ();
+	}
+}
+
+void
+startup ( void )
+{
+	rcc_init ();
+	serial_init ();
+
+	led_init ( PC13 );
+
+	// led_demo ();
+
+	for ( ;; ) {
+	    led_show ();
+	    serial_putc ( 'a' );
+	    serial_putc ( 'A' );
+	    delay ();
 	}
 }
 

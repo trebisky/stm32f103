@@ -83,6 +83,12 @@
 ;  #define STM_RPRO		0x82	/* enable readout protection */
 ;  #define STM_RPRO_DIS		0x92	/* disable readout protection */
     
+
+; Remember that when the boot jumpers are set to run this,
+; this code is aliased to address 0, which is where the ARM
+; fetches the initial stack and PC from, but other than those
+; two initial fetches, this all runs at the addresses shown.
+
 1ffff000: 200001fc		.word 0x200001fc 	; initial stack
 1ffff004: 1ffff021		.word 0x1ffff021 	; reset
 1ffff008: 1ffff765		.word 0x1ffff765 	; NMI
@@ -94,6 +100,7 @@
 ; (or keep) the processor in thumb mode.
 
 ; reset bounces first through here for some reason.
+; sets SP = 0x200001fc
 
 1fffff010:   f8df d004          ldr.w   sp, [pc, #4]    ; 0x1ffff018
 1fffff014:   f000 fbaa          bl      0x1ffff76c
@@ -563,7 +570,9 @@ really makes no sense at all.
 ; The value of "4" is a floating input,
 ;  so a GPIO comes up with all bits floating inputs.
 ; We are changing the config value for PA9
-;  Namely we are making PA9 an output with push/pull drive
+; Setting the value "0xb" selects the alternate function,
+; and also sets it to an output with 50 Mhz capability, and push/pull drive
+; Note that we don't need to set the alternate function for the Rx pin.
 
 1ffff39a:	4836      	ldr	r0, [pc, #216]	; (0x1ffff474) AFIO (0x40010000)
 1ffff39c:	4934      	ldr	r1, [pc, #208]	; (0x1ffff470) =0x444444b4 
@@ -577,6 +586,10 @@ really makes no sense at all.
 
 ; write to 0xe000e014
 ; This is the System Timer, reload value register
+; In a truly bizarre scheme, we shift the AFIO base address value
+; left 3 bits to get 0x80000 as the reload value.
+; Note how this is used below when we calculate the
+; bit timing.
 1ffff3a6:	00c1      	lsls	r1, r0, #3
 1ffff3a8:	6171      	str	r1, [r6, #20]
 
@@ -627,6 +640,7 @@ really makes no sense at all.
 1ffff3ce:	69b0      	ldr	r0, [r6, #24]
 
 ; rsb is "reverse subtract" so this calculates r5 = 0x80000 - r0
+; note that 0x80000 is the counter reload value.
 
 1ffff3d0:	2100      	movs	r1, #0
 1ffff3d2:	f5c0 2500 	rsb	r5, r0, #524288	; 0x80000
@@ -637,6 +651,8 @@ really makes no sense at all.
 1ffff3d8:	8001      	strh	r1, [r0, #0]
 
 ; Write to the Uart Baud rate register
+; r5 is the bit low time in SysTick ticks
+; we calculate the baud rate value as ticks/7
 1ffff3da:	2407      	movs	r4, #7
 1ffff3dc:	fbb5 f4f4 	udiv	r4, r5, r4
 1ffff3e0:	8084      	strh	r4, [r0, #4]
@@ -647,7 +663,10 @@ really makes no sense at all.
 ; 12 = 0x0c; Write to r0 + 0x0c = ...3810 -- UART CR2
 ; We write 0x600 then immediately overwrite with 0
 ;  I think the write of 0x600 is dead wood code
-; This sets 1 stop bit and turns off a variety of special modes
+;  Or maybe the second write of 0 should be to CR3 ?
+;
+; Writing zero sets 1 stop bit and turns off a variety of special modes
+; Writing 0x600 would change the clock polarity.
 
 1ffff3e2:	f44f 64c0 	mov.w	r4, #1536	; 0x600
 1ffff3e6:	8184      	strh	r4, [r0, #12]	; to Uart CR2

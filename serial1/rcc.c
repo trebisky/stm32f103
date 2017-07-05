@@ -16,32 +16,35 @@ struct rcc {
 	volatile unsigned long csr;	/* 24 - xx */
 };
 
+#define RCC_BASE	(struct rcc *) 0x40021000
+
+/* These are in the ape2 register */
 #define GPIOA_ENABLE	0x04
 #define GPIOB_ENABLE	0x08
 #define GPIOC_ENABLE	0x10
-
 #define UART1_ENABLE	0x4000
+
+/* These are in the ape1 register */
 #define UART2_ENABLE	0x20000
 #define UART3_ENABLE	0x40000
 
-#define RCC_BASE	(struct rcc *) 0x40021000
-
-/* As well as enabling peripherals, each peripheral may have
- * clocks to be enabled as well */
+/* The apb2 and apb1 registers hold reset control bits */
 
 void
 rcc_init ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
-	/* Turn on GPIO C */
+	/* Turn on all the GPIO */
+	rp->ape2 |= GPIOA_ENABLE;
+	rp->ape2 |= GPIOB_ENABLE;
 	rp->ape2 |= GPIOC_ENABLE;
 
 	/* Turn on USART 1 */
-	rp->apb2 |= UART1_ENABLE;
+	rp->ape2 |= UART1_ENABLE;
 
-	// rp->apb1 |= UART2_ENABLE;
-	// rp->apb1 |= UART3_ENABLE;
+	// rp->ape1 |= UART2_ENABLE;
+	// rp->ape1 |= UART3_ENABLE;
 }
 
 /* THE END */

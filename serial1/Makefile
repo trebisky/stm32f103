@@ -6,10 +6,12 @@ TOOLS = arm-none-eabi
 # Assembling with gcc makes it want crt0 at link time.
 #AS = $(TOOLS)-gcc
 AS = $(TOOLS)-as
+
+COPTS = -mcpu=cortex-m3 -mthumb -Wno-implicit-function-declaration
 # Use the -g flag if you intend to use gdb
-#CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -g 
-#CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
-CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -O2
+#CC = $(TOOLS)-gcc $(COPTS) -g 
+#CC = $(TOOLS)-gcc $(COPTS)
+CC = $(TOOLS)-gcc $(COPTS) -O2
 
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd
