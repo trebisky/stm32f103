@@ -37,6 +37,11 @@ struct uart {
 #define PCLK1		8000000		/* APB1 clock */
 #define PCLK2		8000000		/* APB2 clock */
 
+#ifdef notdef
+#define PCLK1		36000000		/* APB1 clock */
+#define PCLK2		72000000		/* APB2 clock */
+#endif
+
 /* The baud rate register holds the divisor shifted 4 bits.
  * This lets the lower 4 bits be a fractional part.
  * The formula:  baud = clock / (16 * div) holds.
@@ -49,7 +54,7 @@ struct uart {
 static int
 baud_calc ( int baud )
 {
-	return PCLK1 / baud;
+	return PCLK2 / baud;	/* XXX */
 }
 
 static void

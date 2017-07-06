@@ -19,7 +19,7 @@ OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
-OBJS = locore.o talk.o rcc.o gpio.o serial.o
+OBJS = locore.o talk.o rcc.o gpio.o serial.o timer.o
 
 all: talk.elf talk.dump
 

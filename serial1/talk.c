@@ -64,6 +64,8 @@ led_demo ( void )
 void
 startup ( void )
 {
+	int count = 0;
+
 	rcc_init ();
 	serial_init ();
 
@@ -72,7 +74,8 @@ startup ( void )
 	// led_demo ();
 
 	for ( ;; ) {
-	    led_show ();
+	    if ( (++count % 16) == 0 )
+		led_show ();
 	    serial_putc ( 'a' );
 	    serial_putc ( 'A' );
 	    delay ();
