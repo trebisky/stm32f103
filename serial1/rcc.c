@@ -7,7 +7,7 @@ struct rcc {
 	volatile unsigned long ccr;	/* 0 - clock control */
 	volatile unsigned long cfg;	/* 4 - clock config */
 	volatile unsigned long cir;	/* 8 - clock interrupt */
-	volatile unsigned long apb2;	/* c - peripheral reset */
+	volatile unsigned long apb2;	/* 0c - peripheral reset */
 	volatile unsigned long apb1;	/* 10 - peripheral reset */
 	volatile unsigned long ape3;	/* 14 - peripheral enable */
 	volatile unsigned long ape2;	/* 18 - peripheral enable */
@@ -17,6 +17,16 @@ struct rcc {
 };
 
 #define RCC_BASE	(struct rcc *) 0x40021000
+
+#define FLASH_ACR	((volatile unsigned long *) 0x40022000)
+
+#define FLASH_PREFETCH	0x0010	/* enable prefetch buffer */
+#define FLASH_HCYCLE	0x0008	/* enable half cycle access */
+
+#define FLASH_WAIT0	0x0000	/* for sysclk <= 24 Mhz */
+#define FLASH_WAIT1	0x0001	/* for 24 < sysclk <= 48 Mhz */
+#define FLASH_WAIT2	0x0002	/* for 48 < sysclk <= 72 Mhz */
+
 
 /* These are in the ape2 register */
 #define GPIOA_ENABLE	0x04
@@ -73,17 +83,8 @@ struct rcc {
 #define PLL_9		(7<<18)	/* multiply by 9 to get 72 Mhz */
 
 /* These must be maintained by hand */
-#define PCLK1		24000000
-#define PCLK2		48000000
-
-/* None of my boards (well of the 3 I tested) will run with a 9x multiplier.
- * One runs with 7, all three run with 6x (48 Mhz).
- * If you want to use USB, you must use 48 or 72 since USB only
- * allows a divide by 1.5 or 1 and must run at 48 Mhz.
- *
- * I choose to run my boards at 48 Mhz.
- * This means the PCLK1 must be at 24 Mhz.
- */
+#define PCLK1		36000000
+#define PCLK2		72000000
 
 int
 get_pclk1 ( void )
@@ -97,7 +98,7 @@ get_pclk2 ( void )
 	return PCLK2;
 }
 
-/* The processor comes out of reset using an internal 8 Mhz RC clock */
+/* The processor comes out of reset using HSI (an internal 8 Mhz RC clock) */
 static void
 rcc_clocks ( void )
 {
@@ -108,8 +109,8 @@ rcc_clocks ( void )
 	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_HSI;
 	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI;
 	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI | APB1_DIV2;	/* OK */
-	rp->cfg = PLL_HSE | PLL_6 | SYS_HSI | APB1_DIV2;
-	// rp->cfg = PLL_HSE | PLL_9 | SYS_HSI | APB1_DIV2;
+	// rp->cfg = PLL_HSE | PLL_6 | SYS_HSI | APB1_DIV2;
+	rp->cfg = PLL_HSE | PLL_9 | SYS_HSI | APB1_DIV2;
 
 	/* How you set this is tricky
 	 * Using |= fails.  Consider the bit band access.
@@ -120,6 +121,9 @@ rcc_clocks ( void )
 	while ( ! (rp->ccr & PLL_LOCK ) )
 	   ;
 
+	/* Need flash wait states when we boost the clock */
+	* FLASH_ACR = FLASH_PREFETCH | FLASH_WAIT2;
+
 	// rp->cfg = SYS_HSI;	/* OK - 8 Mhz */
 	// rp->cfg = SYS_HSE;	/* OK - 8 Mhz */
 	// rp->cfg = PLL_HSI | PLL_2 | SYS_PLL;	/* OK */
@@ -127,8 +131,8 @@ rcc_clocks ( void )
 	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_PLL;	/* OK */
 	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL;
 	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL | APB1_DIV2;	/* OK */
-	rp->cfg = PLL_HSE | PLL_6 | SYS_PLL | APB1_DIV2;
-	// rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | APB1_DIV2;
+	// rp->cfg = PLL_HSE | PLL_6 | SYS_PLL | APB1_DIV2;
+	rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | APB1_DIV2;
 }
 
 void

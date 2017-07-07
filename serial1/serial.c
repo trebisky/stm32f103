@@ -31,34 +31,6 @@ struct uart {
 #define	ST_BREAK	0x0100
 #define	ST_CTS		0x0200
 
-#ifdef notdef
-/* Without special fiddling, the chip comes out of reset
- * with these peripheral clocks.
- */
-#define PCLK1		8000000		/* APB1 clock */
-#define PCLK2		8000000		/* APB2 clock */
-
-#ifdef notdef
-#define PCLK1		36000000		/* APB1 clock */
-#define PCLK2		72000000		/* APB2 clock */
-#endif
-
-/* The baud rate register holds the divisor shifted 4 bits.
- * This lets the lower 4 bits be a fractional part.
- * The formula:  baud = clock / (16 * div) holds.
- * but if we let brr = 16 * div, we get:
- *   brr = clock / baud
- * Notice how absurdly simple this is.
- *  other code goes through silly gyrations with handling
- *  the whole and fractional part separately and even worse.
- */
-static int
-baud_calc ( int baud )
-{
-	return PCLK2 / baud;	/* XXX */
-}
-#endif
-
 static void
 uart_init ( struct uart *up, int baud )
 {
@@ -67,7 +39,6 @@ uart_init ( struct uart *up, int baud )
 	up->cr2 = 0;
 	up->cr3 = 0;
 	up->gtp = 0;
-	// up->baud = baud_calc ( baud );
 
 	if ( up == UART1_BASE )
 	    up->baud = get_pclk2() / baud;
