@@ -31,6 +31,7 @@ struct uart {
 #define	ST_BREAK	0x0100
 #define	ST_CTS		0x0200
 
+#ifdef notdef
 /* Without special fiddling, the chip comes out of reset
  * with these peripheral clocks.
  */
@@ -56,6 +57,7 @@ baud_calc ( int baud )
 {
 	return PCLK2 / baud;	/* XXX */
 }
+#endif
 
 static void
 uart_init ( struct uart *up, int baud )
@@ -65,7 +67,12 @@ uart_init ( struct uart *up, int baud )
 	up->cr2 = 0;
 	up->cr3 = 0;
 	up->gtp = 0;
-	up->baud = baud_calc ( baud );
+	// up->baud = baud_calc ( baud );
+
+	if ( up == UART1_BASE )
+	    up->baud = get_pclk2() / baud;
+	else
+	    up->baud = get_pclk1() / baud;
 }
 
 void

@@ -4,7 +4,7 @@
 
 /* The reset and clock control module */
 struct rcc {
-	volatile unsigned long rc;	/* 0 - clock control */
+	volatile unsigned long ccr;	/* 0 - clock control */
 	volatile unsigned long cfg;	/* 4 - clock config */
 	volatile unsigned long cir;	/* 8 - clock interrupt */
 	volatile unsigned long apb2;	/* c - peripheral reset */
@@ -34,9 +34,15 @@ struct rcc {
 
 /* The apb2 and apb1 registers hold reset control bits */
 
-/* Bits in the clock control register */
+/* Bits in the clock control register CCR */
 #define PLL_ENABLE	0x01000000
 #define PLL_LOCK	0x02000000	/* status */
+
+#define HSI_ON		1
+#define HSE_ON		0x10000
+#define HSE_TRIM	0x80
+
+#define CCR_NORM	(HSI_ON | HSE_ON | HSE_TRIM)
 
 /* Bits in the cfg register */
 #define	SYS_HSI		0x00	/* reset value - 8 Mhz internal RC */
@@ -44,13 +50,52 @@ struct rcc {
 #define	SYS_PLL		0x02	/* HSE multiplied by PLL */
 
 #define AHB_DIV2	0x80
+
 #define APB1_DIV2	(4<<8)	/* 36 Mhz max */
 #define APB1_DIV4	(5<<8)	/* 36 Mhz max */
+
 #define APB2_DIV2	(4<<11)	/* 72 Mhz max */
 #define APB2_DIV4	(5<<11)	/* 72 Mhz max */
 
+/* Note that the HSI clock is always divided by 2 pre PLL */
+
+#define PLL_HSI		0x00000
+#define PLL_HSE		0x10000	/* 1 is HSE, 0 is HSI/2 */
+#define PLL_XTPRE	0x20000	/* divide HSE by 2 pre PLL */
+#define PLL_HSE2	0x30000	/* HSE/2 feeds PLL */
+
 #define PLL_2		0
+#define PLL_4		(2<<18)
+#define PLL_5		(3<<18)
+#define PLL_6		(4<<18)
+#define PLL_7		(5<<18)
+#define PLL_8		(6<<18)
 #define PLL_9		(7<<18)	/* multiply by 9 to get 72 Mhz */
+
+/* These must be maintained by hand */
+#define PCLK1		24000000
+#define PCLK2		48000000
+
+/* None of my boards (well of the 3 I tested) will run with a 9x multiplier.
+ * One runs with 7, all three run with 6x (48 Mhz).
+ * If you want to use USB, you must use 48 or 72 since USB only
+ * allows a divide by 1.5 or 1 and must run at 48 Mhz.
+ *
+ * I choose to run my boards at 48 Mhz.
+ * This means the PCLK1 must be at 24 Mhz.
+ */
+
+int
+get_pclk1 ( void )
+{
+	return PCLK1;
+}
+
+int
+get_pclk2 ( void )
+{
+	return PCLK2;
+}
 
 /* The processor comes out of reset using an internal 8 Mhz RC clock */
 static void
@@ -58,18 +103,32 @@ rcc_clocks ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
-	rp->cfg = PLL_2 | APB1_DIV4;
-	// rp->cfg = PLL_9 | APB1_DIV4;
-	rp->rc |= PLL_ENABLE;
+	// rp->cfg = PLL_HSI | PLL_2 | SYS_HSI;
+	// rp->cfg = PLL_HSI | PLL_8 | SYS_HSI;
+	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_HSI;
+	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI;
+	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI | APB1_DIV2;	/* OK */
+	rp->cfg = PLL_HSE | PLL_6 | SYS_HSI | APB1_DIV2;
+	// rp->cfg = PLL_HSE | PLL_9 | SYS_HSI | APB1_DIV2;
 
-	while ( ! (rp->rc & PLL_LOCK ) )
+	/* How you set this is tricky
+	 * Using |= fails.  Consider the bit band access.
+	 * Setting the entire register works.
+	 */
+	rp->ccr = CCR_NORM | PLL_ENABLE;
+
+	while ( ! (rp->ccr & PLL_LOCK ) )
 	   ;
 
-	/* yields the unscaled 8 Mhz crystal */
-	// rp->cfg = SYS_HSE;
-	// rp->cfg = SYS_HSE | AHB_DIV2;
-
-	rp->cfg = SYS_PLL;
+	// rp->cfg = SYS_HSI;	/* OK - 8 Mhz */
+	// rp->cfg = SYS_HSE;	/* OK - 8 Mhz */
+	// rp->cfg = PLL_HSI | PLL_2 | SYS_PLL;	/* OK */
+	// rp->cfg = PLL_HSI | PLL_8 | SYS_PLL;	/* OK */
+	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_PLL;	/* OK */
+	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL;
+	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL | APB1_DIV2;	/* OK */
+	rp->cfg = PLL_HSE | PLL_6 | SYS_PLL | APB1_DIV2;
+	// rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | APB1_DIV2;
 }
 
 void

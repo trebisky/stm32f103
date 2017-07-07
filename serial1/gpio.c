@@ -107,4 +107,11 @@ gpio_uart3 ( void )
 	// gpio_mode ( GPIOB_BASE, 11, INPUT_FLOAT );
 }
 
+/* Timer 2, pin 1 is A15 of 0-15 */
+void
+gpio_timer ( void )
+{
+	gpio_mode ( GPIOA_BASE, 15, OUTPUT_50M | ALT_PUSH_PULL );
+}
+
 /* THE END */
