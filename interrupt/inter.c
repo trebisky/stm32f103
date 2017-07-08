@@ -1,5 +1,9 @@
-/* talk.c
- * (c) Tom Trebisky  7-2-2017
+/* inter.c
+ * (c) Tom Trebisky  7-7-2017
+ *
+ * Interrupt demo.
+ * This sets up Timer 2 and then sends a sequence of characters
+ * out on the Uart, one per timer tick.
  *
  */
 
