@@ -1,8 +1,5 @@
 #!/bin/ruby
 
-#.word   spin        /* 16 IRQ0 */
-
-
 (0..67).each { |v|
     print ".word\tbogus\t\t/* IRQ %2d */\n" % v
 }

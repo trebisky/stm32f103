@@ -69,9 +69,63 @@ serial_putc ( int c )
 {
 	struct uart *up = UART1_BASE;
 
+	if ( c == '\n' )
+	    serial_putc ( '\r' );
+
 	while ( ! (up->status & ST_TXE) )
 	    ;
 	up->data = c;
+}
+
+void
+serial_puts ( char *s )
+{
+	while ( *s )
+	    serial_putc ( *s++ );
+}
+
+/* -------------------------------------------- */
+/* Some IO stuff from Kyu */
+/* -------------------------------------------- */
+
+#define HEX(x)  ((x)<10 ? '0'+(x) : 'A'+(x)-10)
+
+#define PUTCHAR(x)      *buf++ = (x)
+
+static char *
+shex2( char *buf, int val )
+{
+        PUTCHAR( HEX((val>>4)&0xf) );
+        PUTCHAR( HEX(val&0xf) );
+        return buf;
+}
+
+static char *
+shex4( char *buf, int val )
+{
+        buf = shex2(buf,val>>8);
+        return shex2(buf,val);
+}
+
+static char *
+shex8( char *buf, int val )
+{
+        buf = shex2(buf,val>>24);
+        buf = shex2(buf,val>>16);
+        buf = shex2(buf,val>>8);
+        return shex2(buf,val);
+}
+
+void
+show16 ( char *s, int val )
+{
+	char buf[5];
+
+	serial_puts ( s );
+	shex4 ( buf, val );
+	buf[4] = '\0';
+	serial_puts ( buf );
+	serial_putc ( '\n' );
 }
 
 /* THE END */

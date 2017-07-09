@@ -13,8 +13,9 @@ void led_init ( int );
 void led_on ( void );
 void led_off ( void );
 
-/* By itself, this gives a blink rate of about 2.7 Hz
+/* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
  *  so the delay is about 185 ms
+ * With a 72 Mhz clock this yields a 27.75 ms delay
  */
 void
 delay ( void )
@@ -66,14 +67,12 @@ led_demo ( void )
 }
 
 void
-show16 ( char *s, int val )
-{
-}
-
-void
 startup ( void )
 {
 	int count = 0;
+	int t;
+	// int tmin = 0xffff;
+	// int tmax = 0;
 
 	rcc_init ();
 	serial_init ();
@@ -81,17 +80,53 @@ startup ( void )
 	serial_putc ( '\n' );
 
 	led_init ( PC13 );
+	led_off ();
+
 	timer_init ();
 
 	// led_demo ();
 
+#ifdef notdef
+	/* This yields a 1.34 Mhz waveform with a 72 Mhz clock */
 	for ( ;; ) {
+	    led_on ();
+	    led_off ();
+	}
+#endif
+
+#ifdef notdef
+	/* This runs a bit faster, yielding 1.44 Mhz */
+	for ( ;; ) {
+	    gpio_c_set ( PC13, 0 );
+	    gpio_c_set ( PC13, 1 );
+	}
+#endif
+
+#ifdef notdef
+	gpio_a_init ( 1 );
+
+	/* This gives a nice clean waveform at 1.24 Mhz */
+	for ( ;; ) {
+	    gpio_a_set ( 1, 0 );
+	    gpio_a_set ( 1, 1 );
+	}
+#endif
+
+	for ( ;; ) {
+#ifdef notdef
 	    if ( (++count % 16) == 0 )
 		led_show ();
 	    // serial_putc ( 'a' );
 	    // serial_putc ( 'A' );
 	    big_delay ();
-	    show16 ( "Timer ", timer_get() );
+	    /*
+	    t = timer_get();
+	    if ( t < tmin ) tmin = t;
+	    if ( t > tmax ) tmax = t;
+	    show16 ( "Min ", tmin );
+	    show16 ( "Max ", tmax );
+	    */
+#endif
 	}
 }
 

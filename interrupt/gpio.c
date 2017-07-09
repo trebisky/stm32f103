@@ -53,15 +53,50 @@ gpio_mode ( struct gpio *gp, int bit, int mode )
 	int conf;
 	int shift;
 
-	reg = 0;
-	if ( bit >= 8 ) {
-	    reg = 1;
-	    bit -= 8;
-	}
-	shift = bit * 4;
+	reg = bit / 8;
+	shift = (bit%8) * 4;
 
 	conf = gp->cr[reg] & ~(0xf<<shift);
 	gp->cr[reg] = conf | (mode << shift);
+}
+
+void
+gpio_a_set ( int bit, int val )
+{
+	struct gpio *gp = GPIOA_BASE;
+
+	if ( val )
+	    gp->bsrr = 1 << bit;
+	else
+	    gp->bsrr = 1 << (bit+16);
+}
+
+void
+gpio_b_set ( int bit, int val )
+{
+	struct gpio *gp = GPIOB_BASE;
+
+	if ( val )
+	    gp->bsrr = 1 << bit;
+	else
+	    gp->bsrr = 1 << (bit+16);
+}
+
+void
+gpio_c_set ( int bit, int val )
+{
+	struct gpio *gp = GPIOC_BASE;
+
+	if ( val )
+	    gp->bsrr = 1 << bit;
+	else
+	    gp->bsrr = 1 << (bit+16);
+}
+
+void
+gpio_a_init ( int bit )
+{
+	gpio_mode ( GPIOA_BASE, bit, OUTPUT_50M | OUTPUT_PUSH_PULL );
 }
 
 void
@@ -107,11 +142,16 @@ gpio_uart3 ( void )
 	// gpio_mode ( GPIOB_BASE, 11, INPUT_FLOAT );
 }
 
+/* XXX - this is one special case, we have 16 to consider */
 /* Timer 2, pin 1 is A15 of 0-15 */
 void
 gpio_timer ( void )
 {
+	/* Timer 2, outputs  1,2,3,4 */
 	gpio_mode ( GPIOA_BASE, 15, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOA_BASE, 1, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOA_BASE, 2, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOA_BASE, 3, OUTPUT_50M | ALT_PUSH_PULL );
 }
 
 /* THE END */
