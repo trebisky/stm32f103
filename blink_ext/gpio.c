@@ -7,13 +7,13 @@
 /* One of the 3 gpios */
 struct gpio {
 	// volatile unsigned long cr[2];
-	volatile unsigned long crl;
-	volatile unsigned long crh;
-	volatile unsigned long idr;	/* input data (16 bits) */
-	volatile unsigned long odr;	/* output data (16 bits) */
-	volatile unsigned long bsrr;	/* set/reset register */
-	volatile unsigned long brr;	/* reset register */
-	volatile unsigned long lock;	/* lock registers (17 bits) */
+	volatile unsigned long crl;	/* 0x00 */
+	volatile unsigned long crh;	/* 0x04 */
+	volatile unsigned long idr;	/* 0x08 - input data (16 bits) */
+	volatile unsigned long odr;	/* 0x0C - output data (16 bits) */
+	volatile unsigned long bsrr;	/* 0x10 - set/reset register */
+	volatile unsigned long brr;	/* 0x14 - reset register */
+	volatile unsigned long lock;	/* 0x18 - lock registers (17 bits) */
 };
 
 /* We can reset a bit in two places, either via the brr,
@@ -30,9 +30,9 @@ struct gpio {
 #define MODE_OUT_50	0x03	/* Output, 50 Mhz */
 
 /* Output configurations */
-#define CONF_GP_UD	0x0	/* GPIO - Pull up/down */
+#define CONF_GP_PP	0x0	/* GPIO - Pull up/down */
 #define CONF_GP_OD	0x4	/* GPIO - Open drain */
-#define CONF_ALT_UD	0x8	/* Alternate function - Pull up/down */
+#define CONF_ALT_PP	0x8	/* Alternate function - Pull up/down */
 #define CONF_ALT_OD	0xC	/* Alternate function - Open drain */
 
 /* Input configurations */
@@ -45,11 +45,14 @@ struct gpio {
 #define BLINK_GPIO	GPIOC_BASE
 #define BLINK_BIT	13
 #define BLINK_GPIO	GPIOB_BASE
-#define BLINK_BIT	4
+#define BLINK_BIT	0
 #endif
 
-#define BLINK_GPIO	GPIOC_BASE
-#define BLINK_BIT	13
+#define BLINK_GPIO	GPIOA_BASE
+#define BLINK_BIT	0
+
+//#define BLINK_CONF	(MODE_OUT_50 | CONF_GP_OD)
+#define BLINK_CONF	(MODE_OUT_50 | CONF_GP_PP)
 
 struct gpio *gp;
 unsigned long on_mask;
@@ -64,13 +67,11 @@ bit_output ( struct gpio *gp, int bit )
 	if ( bit < 8 ) {
 	    shift = bit * 4;
 	    conf = gp->crl & ~(0xf<<shift);
-	    conf |= (MODE_OUT_2|CONF_GP_OD) << shift;
-	    gp->crl = conf;
+	    gp->crl = conf | BLINK_CONF << shift;
 	} else {
 	    shift = (bit - 8) * 4;
 	    conf = gp->crh & ~(0xf<<shift);
-	    conf |= (MODE_OUT_2|CONF_GP_OD) << shift;
-	    gp->crh = conf;
+	    gp->crh = conf | BLINK_CONF << shift;
 	}
 }
 
@@ -124,6 +125,17 @@ led_fast ( void )
 	}
 }
 
+/* I used this little test and an oscilloscope to find out what pins
+ * would yield a waveform without mischief.
+ * 
+ * A0 to A12 are OK (A13 to A15 do not exist)
+ * B0 to B1 are OK
+ * B2 is "BOOT1", so forget using it.
+ * B3 and B4 are weird
+ * B5 to B15 are fine
+ * C13 is fine (but is the onboard LED)
+ * C14 and C15 are weird (they are the crystal, so forget it).
+ */
 void
 led_test ( void )
 {

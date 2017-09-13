@@ -1,6 +1,7 @@
 /* blink.c
- * (c) Tom Trebisky  7-2-2017
- *
+ * (c) Tom Trebisky  9-12-2017
+ * Blink an external LED on A0
+ * The external pin is selected in gpio.c
  */
 
 void rcc_init ( void );
@@ -57,12 +58,11 @@ startup ( void )
 
 	rcc_init ();
 
-	led_test ();
+	// led_test ();
 
-	// led_init ();
+	led_init ();
 	// led_fast ();
-
-	// my_blink ();
+	my_blink ();
 }
 
 /* THE END */
