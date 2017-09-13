@@ -5,6 +5,7 @@
 
 void rcc_init ( void );
 void led_init ( void );
+void led_test ( void );
 
 void led_on ( void );
 void led_off ( void );
@@ -56,9 +57,11 @@ startup ( void )
 
 	rcc_init ();
 
-	led_init ();
+	led_test ();
 
-	led_fast ();
+	// led_init ();
+	// led_fast ();
+
 	// my_blink ();
 }
 
