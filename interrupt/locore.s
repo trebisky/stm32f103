@@ -23,7 +23,7 @@
 .word   bogus        /* 12   Debug reserved */
 .word   bogus        /* 13   RESERVED */
 .word   bogus        /* 14 PendSV */
-.word   bogus        /* 15 SysTick */
+.word   systick_handler        /* 15 SysTick */
 
 @ and now 68 IRQ vectors
 .word	bogus		/* IRQ  0 */
