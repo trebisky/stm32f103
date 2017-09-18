@@ -20,7 +20,7 @@ OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
-OBJS = locore.o usb1.o nvic.o rcc.o gpio.o prf.o serial.o timer.o
+OBJS = locore.o usb1_main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o
 
 all: usb1.elf usb1.dump
 
