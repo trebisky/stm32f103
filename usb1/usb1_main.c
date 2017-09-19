@@ -99,7 +99,9 @@ startup ( void )
 	rcc_init ();
 
 	serial_init ();
-	// serial_putc ( '\n' );
+	printf ( " -- Booting !\n" );
+
+	usb_init ();
 
 #define A_BIT	7
 	// gpio_a_init ( A_BIT );
