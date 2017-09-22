@@ -45,8 +45,8 @@
 .word	bogus		/* IRQ 16 */
 .word	bogus		/* IRQ 17 */
 .word	bogus		/* IRQ 18 */
-.word	bogus		/* IRQ 19 */
-.word	bogus		/* IRQ 20 */
+.word	usb_hp_handler	/* IRQ 19 */
+.word	usb_lp_handler	/* IRQ 20 */
 .word	bogus		/* IRQ 21 */
 .word	bogus		/* IRQ 22 */
 .word	bogus		/* IRQ 23 */
@@ -68,7 +68,7 @@
 .word	bogus		/* IRQ 39 -- UART 3 */
 .word	bogus		/* IRQ 40 */
 .word	bogus		/* IRQ 41 */
-.word	bogus		/* IRQ 42 */
+.word	usb_wk_handler	/* IRQ 42 */
 .word	bogus		/* IRQ 43 */
 .word	bogus		/* IRQ 44 */
 .word	bogus		/* IRQ 45 */

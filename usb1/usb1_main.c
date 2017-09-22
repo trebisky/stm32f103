@@ -115,10 +115,12 @@ startup ( void )
 	systick_init_int ( 72 );
 
 	serial_puts ( "Hello World\n" );
+	/*
 	printf ( "Hello sailor ...\n" );
 	t = 0xdeadbeef;
 	printf ( "Data: %08x\n", t );
 	printf ( "Data: %08x\n", 0x1234abcd );
+	*/
 
 /* With this timer running, I see a waveform on A1, A2, A3 that is
  * 2 us high, 2 us low (250 kHz).

@@ -42,6 +42,9 @@ struct rcc {
 #define UART2_ENABLE	0x20000
 #define UART3_ENABLE	0x40000
 
+#define USB_ENABLE	0x800000
+#define USB_RESET	0x800000
+
 /* The apb2 and apb1 registers hold reset control bits */
 
 /* Bits in the clock control register CCR */
@@ -91,7 +94,10 @@ struct rcc {
 
 /* To use USB, we must run the clock at 48 or 72 since we can only
  * divide by 1.0 or 1.5 to get the USB clock, which must be 48
+ * Set this bit in the CFG register to divide by 1.0 (else get 1.5).
+ * 72/1.5 = 48
  */
+#define USB_NODIV	0x400000
 
 int
 get_pclk1 ( void )
@@ -105,20 +111,17 @@ get_pclk2 ( void )
 	return PCLK2;
 }
 
-/* The processor comes out of reset using HSI (an internal 8 Mhz RC clock) */
+/* The processor comes out of reset using HSI (an internal 8 Mhz RC clock)
+ * This sets a 9x multiplier for the PLL to give us 72 Mhz.
+ * Note that we do NOT set the USB_NODIV bit, so this gets divided
+ * by 1.5 to give us the 48 Mhz USB clock we need.
+ */
 static void
 rcc_clocks ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
-	// rp->cfg = PLL_HSI | PLL_2 | SYS_HSI;
-	// rp->cfg = PLL_HSI | PLL_8 | SYS_HSI;
-	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_HSI;
-	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI;
-	// rp->cfg = PLL_HSE | PLL_4 | SYS_HSI | APB1_DIV2;	/* OK */
-	// rp->cfg = PLL_HSE | PLL_6 | SYS_HSI | APB1_DIV2;
 	rp->cfg = PLL_HSE | PLL_9 | SYS_HSI | APB1_DIV2;
-	// rp->cfg = PLL_HSE | PLL_10 | SYS_HSI | APB1_DIV2;
 
 	/* How you set this is tricky
 	 * Using |= fails.  Consider the bit band access.
@@ -132,16 +135,7 @@ rcc_clocks ( void )
 	/* Need flash wait states when we boost the clock */
 	* FLASH_ACR = FLASH_PREFETCH | FLASH_WAIT2;
 
-	// rp->cfg = SYS_HSI;	/* OK - 8 Mhz */
-	// rp->cfg = SYS_HSE;	/* OK - 8 Mhz */
-	// rp->cfg = PLL_HSI | PLL_2 | SYS_PLL;	/* OK */
-	// rp->cfg = PLL_HSI | PLL_8 | SYS_PLL;	/* OK */
-	// rp->cfg = PLL_HSE2 | PLL_8 | SYS_PLL;	/* OK */
-	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL;
-	// rp->cfg = PLL_HSE | PLL_4 | SYS_PLL | APB1_DIV2;	/* OK */
-	// rp->cfg = PLL_HSE | PLL_6 | SYS_PLL | APB1_DIV2;
 	rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | APB1_DIV2;
-	// rp->cfg = PLL_HSE | PLL_10 | SYS_PLL | APB1_DIV2;
 }
 
 void
@@ -149,6 +143,7 @@ rcc_init ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
+	/* set up the main (PLL) clock */
 	rcc_clocks ();
 
 	/* Turn on all the GPIO */
@@ -161,9 +156,19 @@ rcc_init ( void )
 
 	rp->ape1 |= TIMER2_ENABLE;
 
+	rp->ape1 |= USB_ENABLE;
+
 	// rp->ape1 |= UART2_ENABLE;
 	// rp->ape1 |= UART3_ENABLE;
 
+}
+
+void
+rcc_usb_reset ( void )
+{
+	struct rcc *rp = RCC_BASE;
+
+	rp->apb1 &= ~USB_RESET;
 }
 
 /* THE END */

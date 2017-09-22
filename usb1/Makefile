@@ -45,9 +45,6 @@ OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/ope
 flash:	usb1.elf
 	openocd $(OCDCFG) -c "program usb1.elf verify reset exit"
 
-welch:	notmain.elf
-	openocd $(OCDCFG) -c "program notmain.elf verify reset exit"
-
 # No need for this now that the above works
 bflash:	usb1.bin
 	openocd $(OCDCFG) -c "program usb1.bin verify reset exit 0x08000000"
