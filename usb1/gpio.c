@@ -20,6 +20,7 @@ struct gpio {
  * The CR registers each control 8 of these bits.
  * cr[0] == cr_low  configures 0-7
  * cr[1] == cr_high configures 8-15
+ *
  * Each bit is controlled by a 4 bit field
  * The reset state is 0x4 for all (input, floating)
  */
@@ -94,10 +95,41 @@ gpio_c_set ( int bit, int val )
 }
 
 void
-gpio_a_init ( int bit )
+gpio_a_output ( int bit )
 {
 	gpio_mode ( GPIOA_BASE, bit, OUTPUT_50M | OUTPUT_PUSH_PULL );
 }
+
+void
+gpio_b_output ( int bit )
+{
+	gpio_mode ( GPIOB_BASE, bit, OUTPUT_50M | OUTPUT_PUSH_PULL );
+}
+
+void
+gpio_c_output ( int bit )
+{
+	gpio_mode ( GPIOC_BASE, bit, OUTPUT_50M | OUTPUT_PUSH_PULL );
+}
+
+void
+gpio_a_input ( int bit )
+{
+	gpio_mode ( GPIOA_BASE, bit, INPUT_FLOAT );
+}
+
+void
+gpio_b_input ( int bit )
+{
+	gpio_mode ( GPIOB_BASE, bit, INPUT_FLOAT );
+}
+
+void
+gpio_c_input ( int bit )
+{
+	gpio_mode ( GPIOC_BASE, bit, INPUT_FLOAT );
+}
+
 
 void
 led_init ( int bit )

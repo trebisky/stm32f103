@@ -91,30 +91,30 @@ led_demo ( void )
 	}
 }
 
+extern volatile unsigned long systick_count;
+
 void
 startup ( void )
 {
 	int t;
+	unsigned long systick_next;
 
 	rcc_init ();
 
 	serial_init ();
-	printf ( " -- Booting !\n" );
+	printf ( " -- Booting ------------------------------\n" );
 
 	usb_init ();
-
-#define A_BIT	7
-	// gpio_a_init ( A_BIT );
 
 	led_init ( PC13 );
 	led_off ();
 
-	/* This gives us a 1 us interrupt rate !
-	 * So we toggle the output port at 500 kHz
-	 */
-	systick_init_int ( 72 );
+	/* This gives us a 1 us interrupt rate !  */
+	// systick_init_int ( 72 );
+	/* This gives a 1 ms rate */
+	systick_init_int ( 72 * 1000 );
 
-	serial_puts ( "Hello World\n" );
+	// serial_puts ( "Hello World\n" );
 	/*
 	printf ( "Hello sailor ...\n" );
 	t = 0xdeadbeef;
@@ -134,8 +134,25 @@ startup ( void )
 
 	// led_demo ();
 
+	// dump_usb_ram ();
+	serial_puts ( "Main is spinning\n" );
+
+#ifdef notdef
+	// printf ( "systick count %d\n", systick_count );
+	systick_next = systick_count + 1000;
+
 	for ( ;; ) {
+	    // printf ( "Tock: %d %d\n", systick_count, systick_next );
+	    if ( systick_count > systick_next ) {
+		printf ( "Tick: %d\n", systick_count );
+		systick_next += 1000;
+	    }
 	}
+#endif
+
+
+	for ( ;; )
+	    ;
 }
 
 /* THE END */

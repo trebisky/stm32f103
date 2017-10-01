@@ -81,14 +81,16 @@ struct systick {
 /* This can be whatever you please */
 #define SYSTICK_RELOAD	100
 
+#ifdef SYSTICK_WAVEFORM
 int ss = 0;
 
+/* look for the waveform on A7 */
 #define A_BIT	7
 
 /* This is spliced into the table in locore.s
  */
-void
-systick_handler ( void )
+static void
+systick_toggle ( void )
 {
 	if ( ss ) {
 	    gpio_a_set ( A_BIT, 0 );
@@ -97,6 +99,18 @@ systick_handler ( void )
 	    gpio_a_set ( A_BIT, 1 );
 	    ss = 1;
 	}
+}
+#endif
+
+unsigned long systick_count = 0;
+
+void
+systick_handler ( void )
+{
+#ifdef SYSTICK_WAVEFORM
+	systick_toggle ();
+#endif
+	++systick_count;
 }
 
 void
@@ -116,11 +130,14 @@ systick_init_int ( int val )
 {
 	struct systick *sp = SYSTICK_BASE;
 
+	systick_count = 0;
+
 	systick_init ( val );
 	sp->csr = TICK_SYSCLK | TICK_ENABLE | TICK_INTPEND;
 
-	/* XXX */
-	gpio_a_init ( A_BIT );
+#ifdef SYSTICK_WAVEFORM
+	gpio_a_output ( A_BIT );
+#endif
 }
 
 void
