@@ -35,6 +35,9 @@ struct rcc {
 #define TIMER1_ENABLE	0x0800
 #define UART1_ENABLE	0x4000
 
+#define ADC2_ENABLE	0x400
+#define ADC1_ENABLE	0x200
+
 /* These are in the ape1 register */
 #define TIMER2_ENABLE	0x0001
 #define TIMER3_ENABLE	0x0002
@@ -69,6 +72,15 @@ struct rcc {
 
 #define APB2_DIV2	(4<<11)	/* 72 Mhz max */
 #define APB2_DIV4	(5<<11)	/* 72 Mhz max */
+
+/* The ADC clock must not exceed 14 Mhz.
+ * Since we set PCLK2 to 72 Mhz, we want to divide by 6
+ * to get 12 Mhz.
+ */
+#define ADC_DIV2	(0<<14)
+#define ADC_DIV4	(1<<14)
+#define ADC_DIV6	(2<<14)
+#define ADC_DIV8	(3<<14)
 
 /* Note that the HSI clock is always divided by 2 pre PLL */
 
@@ -135,7 +147,7 @@ rcc_clocks ( void )
 	/* Need flash wait states when we boost the clock */
 	* FLASH_ACR = FLASH_PREFETCH | FLASH_WAIT2;
 
-	rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | APB1_DIV2;
+	rp->cfg = PLL_HSE | PLL_9 | SYS_PLL | ADC_DIV6 | APB1_DIV2;
 }
 
 void
@@ -153,6 +165,10 @@ rcc_init ( void )
 
 	/* Turn on USART 1 */
 	rp->ape2 |= UART1_ENABLE;
+
+	/* Turn on both ADC */
+	rp->ape2 |= ADC1_ENABLE;
+	rp->ape2 |= ADC2_ENABLE;
 
 	rp->ape1 |= TIMER2_ENABLE;
 

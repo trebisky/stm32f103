@@ -44,7 +44,7 @@
 .word	bogus		/* IRQ 15 */
 .word	bogus		/* IRQ 16 */
 .word	bogus		/* IRQ 17 */
-.word	bogus		/* IRQ 18 */
+.word	adc_handler	/* IRQ 18 */
 .word	usb_hp_handler	/* IRQ 19 */
 .word	usb_lp_handler	/* IRQ 20 */
 .word	bogus		/* IRQ 21 */
