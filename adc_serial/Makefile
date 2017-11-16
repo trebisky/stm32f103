@@ -20,18 +20,18 @@ OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
-OBJS = locore.o usb1_main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
+OBJS = locore.o adc_main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o
 
-all: usb1.elf usb1.dump
+all: adc.elf adc.dump
 
-usb1.dump:	usb1.elf
-	$(DUMP) usb1.elf >usb1.dump
+adc.dump:	adc.elf
+	$(DUMP) adc.elf >adc.dump
 
-usb1.bin:	usb1.elf
-	$(OBJCOPY) usb1.elf usb1.bin -O binary
+adc.bin:	adc.elf
+	$(OBJCOPY) adc.elf adc.bin -O binary
 
-usb1.elf: 	$(OBJS)
-	$(LD) -T usb1.lds -o usb1.elf $(OBJS)
+adc.elf: 	$(OBJS)
+	$(LD) -T adc.lds -o adc.elf $(OBJS)
 
 locore.o:	locore.s
 	$(AS) locore.s -o locore.o
@@ -42,8 +42,8 @@ locore.o:	locore.s
 OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
 
 # This works great once I fixed the base address in the LDS file
-flash:	usb1.elf
-	openocd $(OCDCFG) -c "program usb1.elf verify reset exit"
+flash:	adc.elf
+	openocd $(OCDCFG) -c "program adc.elf verify reset exit"
 
 erase:
 	openocd $(OCDCFG) -c "erase"
@@ -52,14 +52,14 @@ ocd:
 	openocd $(OCDCFG)
 
 # No need for this now that the above works
-bflash:	usb1.bin
-	openocd $(OCDCFG) -c "program usb1.bin verify reset exit 0x08000000"
+bflash:	adc.bin
+	openocd $(OCDCFG) -c "program adc.bin verify reset exit 0x08000000"
 
 gdb:
-	$(GDB) --eval-command="target remote localhost:3333" usb1.elf
+	$(GDB) --eval-command="target remote localhost:3333" adc.elf
 
 gdbtui:
-	$(GDB) -tui --eval-command="target remote localhost:3333" usb1.elf
+	$(GDB) -tui --eval-command="target remote localhost:3333" adc.elf
 
 clean:
-	rm -f *.o usb1.elf usb1.bin usb1.dump
+	rm -f *.o adc.elf adc.bin adc.dump
