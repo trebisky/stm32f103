@@ -45,16 +45,6 @@ OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/ope
 flash:	adc.elf
 	openocd $(OCDCFG) -c "program adc.elf verify reset exit"
 
-erase:
-	openocd $(OCDCFG) -c "erase"
-
-ocd:
-	openocd $(OCDCFG)
-
-# No need for this now that the above works
-bflash:	adc.bin
-	openocd $(OCDCFG) -c "program adc.bin verify reset exit 0x08000000"
-
 gdb:
 	$(GDB) --eval-command="target remote localhost:3333" adc.elf
 
