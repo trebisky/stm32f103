@@ -33,6 +33,7 @@
  */
 
 void rcc_init ( void );
+void adc_init ( void );
 void led_init ( int );
 
 void led_on ( void );
@@ -45,12 +46,33 @@ void usb_hp_handler ( void ) {}
 void usb_lp_handler ( void ) {}
 void usb_wk_handler ( void ) {}
 
+/* We have an LED on this pin */
+#define PC13	13
+
+/* Sorta close to 1 ms with 72 Mhz processor */
+static void
+delay_one_ms ( void )
+{
+	volatile int count = 7273;
+
+	while ( count-- )
+	    ;
+}
+
+void
+delay_ms ( int ms )
+{
+	while ( ms-- )
+	    delay_one_ms ();
+}
+
+#ifdef LED_DEMO
 /* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
  *  so the delay is about 185 ms
  * With a 72 Mhz clock this yields a 27.75 ms delay
  */
 void
-delay ( void )
+little_delay ( void )
 {
 	volatile int count = 1000 * 200;
 
@@ -68,7 +90,6 @@ big_delay ( void )
 	    ;
 }
 
-#define PC13	13
 #define NBLINKS		2
 
 /* Turn the LED on for a pulse */
@@ -76,7 +97,7 @@ static void
 led_show ( void )
 {
 	led_on ();
-	delay ();
+	little_delay ();
 	led_off ();
 }
 
@@ -89,14 +110,15 @@ led_demo ( void )
 	for ( ;; ) {
 	    for ( i=0; i<NBLINKS; i++ ) {
 		led_on ();
-		delay ();
+		little_delay ();
 		led_off ();
-		delay ();
+		little_delay ();
 	    }
 
 	    big_delay ();
 	}
 }
+#endif /* LED_DEMO */
 
 extern volatile unsigned long systick_count;
 
@@ -112,6 +134,8 @@ startup ( void )
 
 	serial_init ();
 	printf ( " -- Booting ------------------------------\n" );
+
+	adc_init ();
 
 	led_init ( PC13 );
 	led_off ();

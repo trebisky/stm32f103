@@ -94,6 +94,7 @@ gpio_c_set ( int bit, int val )
 	    gp->bsrr = 1 << (bit+16);
 }
 
+/* ------------- */
 void
 gpio_a_output ( int bit )
 {
@@ -112,6 +113,7 @@ gpio_c_output ( int bit )
 	gpio_mode ( GPIOC_BASE, bit, OUTPUT_50M | OUTPUT_PUSH_PULL );
 }
 
+/* ------------- */
 void
 gpio_a_input ( int bit )
 {
@@ -128,6 +130,13 @@ void
 gpio_c_input ( int bit )
 {
 	gpio_mode ( GPIOC_BASE, bit, INPUT_FLOAT );
+}
+
+/* ------------- */
+void
+gpio_a_analog ( int bit )
+{
+	gpio_mode ( GPIOA_BASE, bit, INPUT_ANALOG );
 }
 
 
