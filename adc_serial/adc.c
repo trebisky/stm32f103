@@ -44,37 +44,44 @@
  * The Datasheet says that inputs can be 0-3.6 volts
  * The absolute max is 4.0 volts.
  * My unit has a 3.3 volt regulator - but I measure 3.12 volts
+ *
+ * Conversions take 12.5 clocks.
+ *  I run the ADC at PCKL2 / 6 = 12 Mhz
+ * This is a game between the cpu clock, the prescaler options,
+ *  and the requirement that the ADC clock be 14 Mhz or less.
+ * We can have 1 μs at 56 MHz or 1.17 μs at 72 MHz
+ *
  */
 
 /* One of the 2 adc units.
  * Some STM32 devices have 3, we only have 2
  */
 struct adc {
-	volatile unsigned long sr;
-	volatile unsigned long cr1;
-	volatile unsigned long cr2;
-	volatile unsigned long smpr1;
-	volatile unsigned long smpr2;
-	volatile unsigned long jof1;
+	volatile unsigned long sr;	/* status */
+	volatile unsigned long cr1;	/* control 1 */
+	volatile unsigned long cr2;	/* control 2 */
+	volatile unsigned long smpr1;	/* sample times ch 10 .. 17 */
+	volatile unsigned long smpr2;	/* sample times ch 0 .. 9 */
+	volatile unsigned long jof1;	/* injected channel offsets */
 	volatile unsigned long jof2;
 	volatile unsigned long jof3;
 	volatile unsigned long jof4;
-	volatile unsigned long htr;
-	volatile unsigned long ltr;
-	volatile unsigned long sqr1;
-	volatile unsigned long sqr2;
-	volatile unsigned long sqr3;
+	volatile unsigned long htr;	/* watchdog high */
+	volatile unsigned long ltr;	/* watchdog low */
+	volatile unsigned long sqr1;	/* sequence reg ch 13 .. 16 and Len-1 */
+	volatile unsigned long sqr2;	/* sequence reg ch 7 .. 12 */
+	volatile unsigned long sqr3;	/* sequence reg ch 1 .. 6 */
 	volatile unsigned long jsqr;
-	volatile unsigned long jdr1;
-	volatile unsigned long jdr2;
-	volatile unsigned long jdr3;
-	volatile unsigned long jdr4;
-	volatile unsigned long dr;
+	volatile unsigned long jdr1;	/* injected data register 1 */
+	volatile unsigned long jdr2;	/* injected data register 2 */
+	volatile unsigned long jdr3;	/* injected data register 3 */
+	volatile unsigned long jdr4;	/* injected data register 4 */
+	volatile unsigned long dr;	/* data register */
 };
 
 #define ADC1_BASE	(struct adc *) 0x40012400
 #define ADC2_BASE	(struct adc *) 0x40012800
-#define ADC3_BASE	(struct adc *) 0x40013c00	/* We ain't got 3 of these tho */
+#define ADC3_BASE	(struct adc *) 0x40013c00	/* We ain't got no ADC3  */
 
 #define	ADC_IRQ		18
 
@@ -93,12 +100,26 @@ struct adc {
 /* Bits in CR2 */
 #define CR_ON		0x1		/* turn on the ADC */
 #define CR_CONT		0x2		/* continuous mode */
+#define CR_CAL		0x4
+#define CR_RSTCAL	0x8
+#define CR_TSVREFE	0x800000	/* enable temp and vref */
+
+#define CHAN_TEMP	16
+#define CHAN_VREF	17
+
+/* Vref is supposed to be 1.2 volts nominal
+ *   1.16 to 1.26 volts.
+ */
 
 void adc_start ( void );
 void adc_on ( void );
+void adc_set_chan ( int );
 
-// #define ADC_SUPPLY 3130
-#define ADC_SUPPLY 3600
+/* It is not clear whether conversions are full scale at 3.6 volts
+ * or at the actual Vcc voltage - it seems to be actual Vcc, maybe.
+ */
+#define ADC_SUPPLY 3080
+// #define ADC_SUPPLY 3600
 
 /* ADC 1 and 2 share a common interrupt */
 void
@@ -133,10 +154,18 @@ adc_init ( void )
 
 	/* Make A0 an analog input */
 	gpio_a_analog ( 0 );
+	adc_set_chan ( 0 );
 
-	adc_on ();
-	ap->cr1 |= CR_EOCIE;
+	/* Turn on the ADC with temp and vref enabled */
+	ap->cr2 |= CR_ON|CR_TSVREFE;
 	delay_ms ( 20 );
+
+	/* Calibrate */
+	ap->cr2 |= CR_CAL;
+	while ( ap->cr2 & CR_CAL )
+	    ;
+
+	ap->cr1 |= CR_EOCIE;
 
 	printf ( "ADC sr = %08x\n", ap->sr );
 	printf ( "ADC cr2 = %08x\n", ap->cr2 );
@@ -145,6 +174,35 @@ adc_init ( void )
 	    adc_start ();
 	    delay_ms (1000);
 	}
+
+	printf ( " temp\n" );
+	adc_set_chan ( CHAN_TEMP );
+	for ( i=0; i<10; i++ ) {
+	    adc_start ();
+	    delay_ms (1000);
+	}
+
+	printf ( " vref\n" );
+	adc_set_chan ( CHAN_VREF );
+	for ( i=0; i<10; i++ ) {
+	    adc_start ();
+	    delay_ms (1000);
+	}
+}
+
+/* Degenerate code for a single channel.
+ *  Set the sequence registers.
+ *  all the other channel registers get ignored.
+ *  L = 0 says to convert one channel.
+ */ 
+void
+adc_set_chan ( int chan )
+{
+	struct adc *ap = ADC1_BASE;
+
+	ap->sqr1 = 0;
+	ap->sqr2 = 0;
+	ap->sqr3 = chan;
 }
 
 /* Start a conversion.
