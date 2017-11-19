@@ -118,27 +118,46 @@ void adc_set_chan ( int );
 /* It is not clear whether conversions are full scale at 3.6 volts
  * or at the actual Vcc voltage - it seems to be actual Vcc, maybe.
  */
-#define ADC_SUPPLY 3080
+// #define ADC_SUPPLY 3080
+#define ADC_SUPPLY 3310
 // #define ADC_SUPPLY 3600
+
+static volatile char adc_finished; 
+static short adc_val;
 
 /* ADC 1 and 2 share a common interrupt */
 void
 adc_handler ( void )
 {
 	struct adc *ap = ADC1_BASE;
-	int x;
-	int y;
+	// int x;
+	// int y;
 
 	// printf ( "ADC interrupt\n" );
 	// serial_puts ( "ADC interrupt\n" );
 
 	if ( ap->sr & SR_EOC ) {
-	    x = ap->dr;
-	    y = ADC_SUPPLY * x / 4096;
-	    printf ( "ADC eoc: %08x %d %d\n", x, x, y );
+	    // x = ap->dr;
+	    // y = ADC_SUPPLY * x / 4096;
+	    // printf ( "ADC eoc: %08x %d %d\n", x, x, y );
+	    adc_val = ap->dr;
+	    adc_finished = 1;
 	} else {
 	    serial_puts ( "unexpected ADC interrupt\n" );
 	}
+}
+
+int
+adc_read ( void )
+{
+	adc_finished = 0;
+
+	adc_start ();
+
+	while ( ! adc_finished )
+	    ;
+
+	return ADC_SUPPLY * adc_val / 4096;
 }
 
 void

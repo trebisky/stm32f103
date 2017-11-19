@@ -1,6 +1,6 @@
-/* adc_serial.c
+/* lithium.c
  *
- * (c) Tom Trebisky  11-16-2017
+ * (c) Tom Trebisky  11-18-2017
  *
  * Derived from my usb1.c
  * which was derived from inter.c
@@ -69,80 +69,132 @@ delay_ms ( int ms )
 	    delay_one_ms ();
 }
 
-#ifdef LED_DEMO
-/* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
- *  so the delay is about 185 ms
- * With a 72 Mhz clock this yields a 27.75 ms delay
- */
-void
-little_delay ( void )
-{
-	volatile int count = 1000 * 200;
-
-	while ( count-- )
-	    ;
-}
-
-/* We scale the above to try to get a 500 ms delay */
-void
-big_delay ( void )
-{
-	volatile int count = 1000 * 540;
-
-	while ( count-- )
-	    ;
-}
-
-#define NBLINKS		2
-
-/* Turn the LED on for a pulse */
-static void
-led_show ( void )
-{
-	led_on ();
-	little_delay ();
-	led_off ();
-}
-
-static void
-led_demo ( void )
-{
-	int i;
-
-
-	for ( ;; ) {
-	    for ( i=0; i<NBLINKS; i++ ) {
-		led_on ();
-		little_delay ();
-		led_off ();
-		little_delay ();
-	    }
-
-	    big_delay ();
-	}
-}
-#endif /* LED_DEMO */
-
 extern volatile unsigned long systick_count;
 
 #define CHAN_TEMP	16
 #define CHAN_VREF	17
 
+/* I have a resistor divider sampling the battery voltage.
+ * I use a 4.7K and a 10K resistor, ordinary precision.
+ *    This should scale by 0.680
+ * With a 3.78 volt battery, I measure 2.576 volts
+ *    This is a scale of 0.6815
+ */
+#define SCALE	681
+
+void
+relay_closed ( void )
+{
+	gpio_a_set ( ENABLE, 1 );
+	led_on ();
+	delay_ms ( 500 );
+}
+
+void
+relay_open ( void )
+{
+	gpio_a_set ( ENABLE, 0 );
+	led_off ();
+	delay_ms ( 500 );
+}
+
+int
+read_avg ( int n )
+{
+	int i;
+	int val;
+	int sum;
+
+	sum = 0;
+	for ( i=0; i<n; i++ ) {
+	    val = adc_read ();
+	    val = (val * 1000) / SCALE;
+	    sum += val;
+	    delay_ms (50);
+	}
+
+	return sum / n;
+}
+
+/* We have a load resistor of 16.67 ohms.
+ * With the load attached the current is Vbat / 16.67
+ * which for a 3.7 volt battery is 0.222 amps
+ * This routine measure the voltage drop when we
+ * attach the load.  Rint = Vdrop / Iload or
+ * Rint = Vdrop * 16.67 / Vbat
+ * Scaling Rload by 1000 yields milliohms
+ */
+#define NAVG	20
+#define RLOAD	16667
+
+void
+measure_rint ( void )
+{
+	int v_open;
+	int v_load;
+	int dv;
+	int rint;
+
+	/* Make A0 an analog input */
+	gpio_a_analog ( 0 );
+	adc_set_chan ( 0 );
+
+	relay_open ();
+
+	v_open = read_avg ( NAVG );
+	printf ( "V open = %d\n", v_open );
+
+	relay_closed ();
+
+	v_load = read_avg ( NAVG );
+	printf ( "V loaded = %d\n", v_load );
+
+	relay_open ();
+
+	dv = v_open - v_load;
+	rint = dv * RLOAD / v_load;
+	// rint /= 100;
+	printf ( "R int = %d (milliohms)\n", rint );
+}
+
 void
 adc_test ( void )
 {
 	int i;
+	int val;
 
 	/* Make A0 an analog input */
 	gpio_a_analog ( 0 );
 	adc_set_chan ( 0 );
 
 	printf ( " ADC channel 0\n" );
-	for ( i=0; i<10; i++ ) {
-	    adc_start ();
+
+	for ( i=0; i<5; i++ ) {
+	    val = adc_read ();
+	    val = (val * 1000) / SCALE;
+	    printf ( "Read: %d\n", val );
 	    delay_ms (1000);
 	}
 
+	relay_closed ();
+
+	for ( i=0; i<5; i++ ) {
+	    val = adc_read ();
+	    val = (val * 1000) / SCALE;
+	    printf ( "Read: %d\n", val );
+	    delay_ms (1000);
+	}
+
+	relay_open ();
+
+	for ( i=0; i<5; i++ ) {
+	    val = adc_read ();
+	    val = (val * 1000) / SCALE;
+	    printf ( "Read: %d\n", val );
+	    delay_ms (1000);
+	}
+
+#ifdef notdef
 	printf ( " temp\n" );
 	adc_set_chan ( CHAN_TEMP );
 	for ( i=0; i<10; i++ ) {
@@ -156,6 +208,7 @@ adc_test ( void )
 	    adc_start ();
 	    delay_ms (1000);
 	}
+#endif
 }
 
 static int
@@ -185,7 +238,6 @@ startup ( void )
 	adc_init ();
 
 	led_init ( PC13 );
-	led_off ();
 
 	gpio_a_output ( ENABLE );
 
@@ -197,10 +249,18 @@ startup ( void )
 
 	systick_init_int ( 72 * 1000 * 2000 );
 
-	/* Pull low to turn on NPN bipolar transistor */
-	// gpio_a_set ( ENABLE, 1 );
-	// for ( ;; ) ;
+	/* The board powers up with the port in
+	 * the low state, so this actually does nothing.
+	 * But we want to ensure the port is low, so
+	 * the bipolar transistor that controls the relay
+	 * comes up open -- we will close it when we are
+	 * good and ready.
+	 *
+	 * We use the on board LED to indicate relay state.
+	 */
+	relay_open ();
 
+#ifdef notdef
 	x = 0;
 	for ( ;; ) {
 	    delay_ms ( 1000 );
@@ -212,9 +272,12 @@ startup ( void )
 		x = 1;
 	    }
 	}
+#endif
 
 	// adc_test ();
+	measure_rint ();
 
+#ifdef notdef
 	/* Wait for a command */
 	serial_getl ( buf );
 
@@ -228,63 +291,9 @@ startup ( void )
 	    delay_ms ( 2000 );
 	    // x++;
 	}
-
-#ifdef notdef
-	printf ( "Hello sailor ...\n" );
-
-	for ( ;; ) {
-	    // x = serial_getc ();
-	    // printf ( "Read: %02x\n", x );
-	    serial_getl ( buf );
-	    printf ( "GOT: %s", buf );
-	    // serial_puts ( buf );
-	}
-	x = 0;
-	for ( ;; ) {
-	    if ( serial_check() ) {
-		// printf ( "Wait %d\n", x );
-		serial_getl ( buf );
-		serial_puts ( buf );
-		x = 0;
-	    }
-	    x++;
-	}
 #endif
-
-	// serial_puts ( "Hello World\n" );
-	/*
-	printf ( "Hello sailor ...\n" );
-	t = 0xdeadbeef;
-	printf ( "Data: %08x\n", t );
-	printf ( "Data: %08x\n", 0x1234abcd );
-	*/
-
-/* With this timer running, I see a waveform on A1, A2, A3 that is
- * 2 us high, 2 us low (250 kHz).
- * The timer I set up is indeed running at 250 kHz and is tim2
- * These pins are:
- *  A1 = PWM2/2
- *  A2 = PWM2/3
- *  A3 = PWM2/4
- */
-	// timer_init ();
-
-	// led_demo ();
 
 	serial_puts ( "Main is spinning\n" );
-
-#ifdef notdef
-	// printf ( "systick count %d\n", systick_count );
-	systick_next = systick_count + 1000;
-
-	for ( ;; ) {
-	    // printf ( "Tock: %d %d\n", systick_count, systick_next );
-	    if ( systick_count > systick_next ) {
-		printf ( "Tick: %d\n", systick_count );
-		systick_next += 1000;
-	    }
-	}
-#endif
 
 	for ( ;; )
 	    ;

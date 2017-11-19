@@ -81,7 +81,7 @@ struct systick {
 /* This can be whatever you please */
 #define SYSTICK_RELOAD	100
 
-#define SYSTICK_BLINK
+// #define SYSTICK_BLINK
 
 #ifdef SYSTICK_BLINK
 int ss = 0;
