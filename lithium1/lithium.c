@@ -157,58 +157,82 @@ measure_rint ( void )
 	printf ( "R int = %d (milliohms)\n", rint );
 }
 
+static void
+show_readings ( int count, int delay )
+{
+	int i;
+	int val;
+
+	for ( i=0; i<count; i++ ) {
+	    val = adc_read ();
+	    val = (val * 1000) / SCALE;
+	    printf ( "Read: %d\n", val );
+	    delay_ms (delay);
+	}
+}
+
 void
-adc_test ( void )
+adc_test1 ( void )
+{
+	/* Make A0 an analog input */
+	gpio_a_analog ( 0 );
+
+	printf ( " ADC channel 0\n" );
+	adc_set_chan ( 0 );
+
+	relay_open ();
+	printf ( "Relay open\n" );
+
+	show_readings ( 5, 1000 );
+
+	relay_closed ();
+	printf ( "Relay closed\n" );
+	delay_ms ( 1000 );
+
+	show_readings ( 5, 1000 );
+
+	relay_open ();
+	printf ( "Relay open\n" );
+	delay_ms ( 1000 );
+
+	show_readings ( 5, 1000 );
+
+	printf ( " temp\n" );
+	adc_set_chan ( CHAN_TEMP );
+	show_readings ( 5, 1000 );
+
+	printf ( " vref\n" );
+	adc_set_chan ( CHAN_VREF );
+	show_readings ( 5, 1000 );
+
+	printf ( " ADC channel 0\n" );
+	adc_set_chan ( 0 );
+	show_readings ( 5, 1000 );
+}
+
+void
+adc_test2 ( void )
 {
 	int i;
 	int val;
 
 	/* Make A0 an analog input */
 	gpio_a_analog ( 0 );
-	adc_set_chan ( 0 );
 
-	printf ( " ADC channel 0\n" );
-
-	for ( i=0; i<5; i++ ) {
-	    val = adc_read ();
-	    val = (val * 1000) / SCALE;
-	    printf ( "Read: %d\n", val );
-	    delay_ms (1000);
-	}
-
-	relay_closed ();
-
-	for ( i=0; i<5; i++ ) {
-	    val = adc_read ();
-	    val = (val * 1000) / SCALE;
-	    printf ( "Read: %d\n", val );
-	    delay_ms (1000);
-	}
+	// adc_set_chan ( 0 );
+	// adc_set_chan ( CHAN_VREF );
+	adc_set_chan ( CHAN_TEMP );
 
 	relay_open ();
 
-	for ( i=0; i<5; i++ ) {
+	printf ( " ADC channel 0\n" );
+
+	for ( i=0; i<25; i++ ) {
 	    val = adc_read ();
 	    val = (val * 1000) / SCALE;
-	    printf ( "Read: %d\n", val );
-	    delay_ms (1000);
+	    printf ( "Got: %d\n", val );
+	    delay_ms (10);
 	}
-
-#ifdef notdef
-	printf ( " temp\n" );
-	adc_set_chan ( CHAN_TEMP );
-	for ( i=0; i<10; i++ ) {
-	    adc_start ();
-	    delay_ms (1000);
-	}
-
-	printf ( " vref\n" );
-	adc_set_chan ( CHAN_VREF );
-	for ( i=0; i<10; i++ ) {
-	    adc_start ();
-	    delay_ms (1000);
-	}
-#endif
 }
 
 static int
@@ -274,8 +298,9 @@ startup ( void )
 	}
 #endif
 
-	// adc_test ();
-	measure_rint ();
+	adc_test1 ();
+	// adc_test2 ();
+	// measure_rint ();
 
 #ifdef notdef
 	/* Wait for a command */

@@ -17,8 +17,17 @@
  *	channel 17 - voltage reference
  * These internal devices are only available to ADC1
  *
+ * The Voltage reference is nominal 1.2 volts.
+ * The pin Vref+ and Vref- are only available on devices
+ *  with 100 pin packages, ours has only 48 pins,
+ *  so ignore all the schematics that should bypassing for this.
+ *
+ * The Temp sensor requires a 17.1 microsecond sample time.
+ *  it reads a nominal 1.43 volts (1.34 to 1.52 volts) at 25C
+ *  it has a slope of 4.3 millivolts (4.0 to 4.6) per degree C
+ *
  * By all indications, only 10 of the 16 external inputs
- *  actually get routed to device pins.
+ *  actually get routed to device pins on our device.
  * Indeed, you do not get C0-C5 on the STM32F103,
  *  so only 10 channels are available.
  *
@@ -79,6 +88,13 @@ struct adc {
 	volatile unsigned long dr;	/* data register */
 };
 
+/* Note that the sequence registers hold channel numbers.
+ * The sample time registers are indexed by channel number.
+ */
+
+/* Some STM32 devices have an "ADC3" which is entirely independent.
+ * in our case we have ADC1 and ADC2, which are master and slave.
+ */
 #define ADC1_BASE	(struct adc *) 0x40012400
 #define ADC2_BASE	(struct adc *) 0x40012800
 #define ADC3_BASE	(struct adc *) 0x40013c00	/* We ain't got no ADC3  */
@@ -102,7 +118,23 @@ struct adc {
 #define CR_CONT		0x2		/* continuous mode */
 #define CR_CAL		0x4
 #define CR_RSTCAL	0x8
+#define CR_EXTTRIG	0x100000	/* enable ext trigger */
+#define CR_JSWSTART	0x200000	/* SW start injected */
+#define CR_SWSTART	0x400000	/* SW start regular */
 #define CR_TSVREFE	0x800000	/* enable temp and vref */
+
+/* Events that start conversions */
+#define EV_T1_CC1	0
+#define EV_T1_CC2	1
+#define EV_T1_CC3	2
+#define EV_T2_CC2	3
+#define EV_T3_TRG0	4
+#define EV_T4_CC4	5
+#define EV_EXTI_11	6
+#define EV_SW		7
+
+#define EXTSEL_SHIFT	17
+#define JEXTSEL_SHIFT	12
 
 #define CHAN_TEMP	16
 #define CHAN_VREF	17
@@ -123,7 +155,7 @@ void adc_set_chan ( int );
 // #define ADC_SUPPLY 3600
 
 static volatile char adc_finished; 
-static short adc_val;
+static volatile int adc_val;
 
 /* ADC 1 and 2 share a common interrupt */
 void
@@ -150,12 +182,21 @@ adc_handler ( void )
 int
 adc_read ( void )
 {
+	int tmo;
+
 	adc_finished = 0;
+	adc_val = 0xdeadbeef;
 
 	adc_start ();
 
-	while ( ! adc_finished )
+	tmo = 9999;
+	while ( tmo-- && ! adc_finished )
 	    ;
+
+	/* Timeout exits with tmo == -1 */
+	if ( tmo <= 0 ) {
+	    printf ( "ADC read timeout %d, %08x\n", tmo, adc_val );
+	}
 
 	return ADC_SUPPLY * adc_val / 4096;
 }
@@ -172,6 +213,10 @@ adc_init ( void )
 
 	/* Turn on the ADC with temp and vref enabled */
 	ap->cr2 |= CR_ON|CR_TSVREFE;
+	/* start conversions via software */
+	ap->cr2 |= (EV_SW<<EXTSEL_SHIFT);
+	ap->cr2 |= CR_EXTTRIG;
+
 	delay_ms ( 20 );
 
 	/* Calibrate */
@@ -179,11 +224,26 @@ adc_init ( void )
 	while ( ap->cr2 & CR_CAL )
 	    ;
 
+	/* Set all channels to the longest possible  sample time.
+	 * Excessive, but no matter unless we go for speed.
+	 */
+	ap->smpr1 = 0x00ffffff;
+	ap->smpr2 = 0x3fffffff;
+
 	ap->cr1 |= CR_EOCIE;
 
 	printf ( "ADC sr = %08x\n", ap->sr );
 	printf ( "ADC cr2 = %08x\n", ap->cr2 );
 }
+
+#define SAMP_1		0	/* 000: 1.5 cycles */
+#define SAMP_7		1	/* 001: 7.5 cycles */
+#define SAMP_13		2	/* 010: 13.5 cycles */
+#define SAMP_28		3	/* 011: 28.5 cycles */
+#define SAMP_41		4	/* 100: 41.5 cycles */
+#define SAMP_55		5	/* 101: 55.5 cycles */
+#define SAMP_71		6	/* 110: 71.5 cycles */
+#define SAMP_239	7	/* 111: 239.5 cycles */
 
 /* Degenerate code for a single channel.
  *  Set the sequence registers.
@@ -201,14 +261,14 @@ adc_set_chan ( int chan )
 }
 
 /* Start a conversion.
- * After that, it starts a conversion.
  */
 void
 adc_start ( void )
 {
 	struct adc *ap = ADC1_BASE;
 
-	ap->cr2 |= CR_ON;
+	// ap->cr2 |= CR_ON;
+	ap->cr2 |= CR_SWSTART;
 }
 
 /* The first time this is called, it brings the ADC out of power-down.
