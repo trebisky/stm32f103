@@ -31,14 +31,32 @@ struct uart {
 #define	ST_BREAK	0x0100
 #define	ST_CTS		0x0200
 
+/* bits in CR 1 */
+#define CR_UE		0x2000		/* Uart enable */
+#define CR_M		0x1000		/* 1-8-n (else 1-9-n) */
+#define CR_WAKE		0x0800
+#define CR_PEN		0x0400		/* Parity enable */
+#define CR_PODD		0x0200		/* Parity odd (else even) */
+#define CR_PEIE		0x0100		/* Parity error interrupt enable */
+#define CR_TXEIE	0x0080		/* TXE interrupt enable */
+#define CR_TCIE		0x0040		/* TX complete interrupt enable */
+#define CR_RXNEIE	0x0020		/* RX not empty interrupt enable */
+#define CR_IDLEIE	0x0010		/* Idle interrupt enable */
+#define CR_TXE		0x0008		/* Tx enable */
+#define CR_RXE		0x0004		/* Rx enable */
+#define CR_RWU		0x0002		/* Rx Wakeup control */
+#define CR_BREAK	0x0001		/* Send break */
+
 void serial_putc ( int );
 
 static void
 uart_init ( struct uart *up, int baud )
 {
 	/* 1 start bit, even parity */
-	up->cr1 = 0x340c;
-	up->cr2 = 0;
+	// up->cr1 = 0x340c;
+	/* 1 - 8 - x - none */
+	up->cr1 = CR_UE | CR_M | CR_TXE | CR_RXE;
+	up->cr2 = 0;	/* x = 1 stop bit */
 	up->cr3 = 0;
 	up->gtp = 0;
 
@@ -94,7 +112,9 @@ serial_getc ( void )
 	return c;
 }
 
-/* XXX - sloppy interface */
+/* Return string without terminator
+ * XXX - dangerous interface.
+ */
 void
 serial_getl ( char *buf )
 {
@@ -104,9 +124,9 @@ serial_getl ( char *buf )
 	    c = serial_getc ();
 	    if ( c == '\r' )
 		c = '\n';
-	    *buf++ = c;
 	    if ( c == '\n' )
 		break;
+	    *buf++ = c;
 	}
 	*buf++ = '\0';
 }

@@ -4,22 +4,29 @@
 
 require 'serialport'
 
-# port is        : /dev/ttyUSB1
-# baudrate is    : 115200
-
-usb = "/dev/ttyUSB1"
-baud = 115200
-parity = SerialPort::NONE
-
-$ser = SerialPort.new usb, baud, 8, 1, parity
-
-# This delay should not be needed, but for now
-# it is a workaround for a bug in the remote
-# firmware.
-def sout ( x )
-    $ser.write x
-    sleep 0.001
+class Lithium
+    def initialize
+	@usb = "/dev/ttyUSB2"
+	@baud = 115200
+	@parity = SerialPort::NONE
+	print "Connecting on port #{@usb} at #{@baud} baud\n"
+	@ser = SerialPort.new @usb, @baud, 8, 1, @parity
+    end
+    # We shouldn't need the delay, but for now it is a
+    # workaround for some kind of bug in the firmware.
+    def sout ( x )
+	@ser.write x
+	sleep 0.001
+	@ser.flush
+    end
+    def sin
+	@ser.read(1)
+    end
+    def gets
+    end
 end
+
+l = Lithium.new
 
 #s.puts "abcd\r"
 #s.write "abcd\n\r"
@@ -30,19 +37,19 @@ end
 # This works too.
 # s.write "\n"
 
-sout "a"
-sout "b"
-sout "c"
-sout "d"
-sout "\n"
+l.sout "a"
+l.sout "b"
+l.sout "c"
+l.sout "d"
+l.sout "\n"
 
 loop {
-    c = $ser.read(1)
+    c = l.sin
     putc c
 }
 
 loop {
-    l = $ser.gets
+    l = @ser.gets
     puts l
 }
 

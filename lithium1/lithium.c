@@ -98,8 +98,9 @@ relay_open ( void )
 	delay_ms ( 500 );
 }
 
+/* Do a battery reading with averaging */
 int
-read_avg ( int n )
+read_bat ( int n )
 {
 	int i;
 	int val;
@@ -107,8 +108,7 @@ read_avg ( int n )
 
 	sum = 0;
 	for ( i=0; i<n; i++ ) {
-	    val = adc_read ();
-	    val = (val * 1000) / SCALE;
+	    val = (adc_read() * 1000) / SCALE;
 	    sum += val;
 	    delay_ms (50);
 	}
@@ -141,12 +141,12 @@ measure_rint ( void )
 
 	relay_open ();
 
-	v_open = read_avg ( NAVG );
+	v_open = read_bat ( NAVG );
 	printf ( "V open = %d\n", v_open );
 
 	relay_closed ();
 
-	v_load = read_avg ( NAVG );
+	v_load = read_bat ( NAVG );
 	printf ( "V loaded = %d\n", v_load );
 
 	relay_open ();
@@ -165,8 +165,70 @@ show_readings ( int count, int delay )
 
 	for ( i=0; i<count; i++ ) {
 	    val = adc_read ();
-	    val = (val * 1000) / SCALE;
 	    printf ( "Read: %d\n", val );
+	    delay_ms (delay);
+	}
+}
+
+/* This will work with the internal temperature sensor.
+ * A 17.1 microsecond sample time is recommended.
+ * (I used the longest sample time possible).
+ * However, with a 12 Mhz clock,
+ *  this would be 12*17.1 = 205 ADC clocks.
+ * The longest time (239) is indeed required.
+ */
+
+#define TEMP_V25	1390	/* large chip to chip variation */
+#define TEMP_SLOPE	43	/* 40 to 46 */
+
+static void
+show_temp ( int count, int delay )
+{
+	int i;
+	int val;
+	int tc, tf;
+
+	for ( i=0; i<count; i++ ) {
+	    val = adc_read ();
+	    tc = ((TEMP_V25 - val) * 10) /TEMP_SLOPE;
+	    tc += 25;
+	    tf = 32 + (tc*18)/10;
+	    printf ( "Temp (v,tc,tf): %d %d %d\n", val, tc, tf );
+	    delay_ms (delay);
+	}
+}
+
+/* Monitor the on chip temperature sensor.
+ * Note that the voltage decreases as the temperature increases!
+ */
+void
+adc_test3 ( void )
+{
+	int val;
+	int tc, tf;
+
+	adc_set_chan ( CHAN_TEMP );
+
+	for ( ;; ) {
+	    val = adc_read ();
+	    tc = ((TEMP_V25 - val) * 10) /TEMP_SLOPE;
+	    tc += 25;
+	    tf = 32 + (tc*18)/10;
+	    printf ( "Temp (v,tc,tf): %d %d %d\n", val, tc, tf );
+	    delay_ms (500);
+	}
+}
+
+static void
+show_battery ( int count, int delay )
+{
+	int i;
+	int val;
+
+	for ( i=0; i<count; i++ ) {
+	    // val = adc_read ();
+	    val = (adc_read() * 1000) / SCALE;
+	    printf ( "Battery: %d\n", val );
 	    delay_ms (delay);
 	}
 }
@@ -183,23 +245,23 @@ adc_test1 ( void )
 	relay_open ();
 	printf ( "Relay open\n" );
 
-	show_readings ( 5, 1000 );
+	show_battery ( 5, 1000 );
 
 	relay_closed ();
 	printf ( "Relay closed\n" );
 	delay_ms ( 1000 );
 
-	show_readings ( 5, 1000 );
+	show_battery ( 5, 1000 );
 
 	relay_open ();
 	printf ( "Relay open\n" );
 	delay_ms ( 1000 );
 
-	show_readings ( 5, 1000 );
+	show_battery ( 5, 1000 );
 
 	printf ( " temp\n" );
 	adc_set_chan ( CHAN_TEMP );
-	show_readings ( 5, 1000 );
+	show_temp ( 5, 1000 );
 
 	printf ( " vref\n" );
 	adc_set_chan ( CHAN_VREF );
@@ -207,30 +269,38 @@ adc_test1 ( void )
 
 	printf ( " ADC channel 0\n" );
 	adc_set_chan ( 0 );
-	show_readings ( 5, 1000 );
+	show_battery ( 5, 1000 );
 }
+
+#define T2_CHAN		1
+
+/* On my breadboard this is a TMP36 temperature sensor.
+ * This gives 750 mV at 25C, and changes 10 mV per C
+ */
 
 void
 adc_test2 ( void )
 {
 	int i;
 	int val;
+	int tc, tf;
 
-	/* Make A0 an analog input */
-	gpio_a_analog ( 0 );
+	/* Make A1 an analog input */
+	gpio_a_analog ( T2_CHAN );
 
-	// adc_set_chan ( 0 );
+	printf ( " ADC channel %d\n", T2_CHAN );
+	adc_set_chan ( T2_CHAN );
 	// adc_set_chan ( CHAN_VREF );
-	adc_set_chan ( CHAN_TEMP );
+	// adc_set_chan ( CHAN_TEMP );
 
 	relay_open ();
 
-	printf ( " ADC channel 0\n" );
-
 	for ( i=0; i<25; i++ ) {
 	    val = adc_read ();
-	    val = (val * 1000) / SCALE;
-	    printf ( "Got: %d\n", val );
+	    tc = val - 500;
+	    tf = tc * 18 / 10;
+	    tf += 320;
+	    printf ( "Temp (v,tc,tf): %d %d %d\n", val, tc, tf );
 	    delay_ms (10);
 	}
 }
@@ -245,14 +315,90 @@ my_strlen ( char *s )
 	return rv;
 }
 
+#ifdef notdef
+void
+serial_test ( void )
+{
+	char buf[80];
+	char *p;
+	int x;
+
+	for ( ;; ) {
+	    /* Wait for a command */
+	    printf ( "Ready: " );
+	    serial_getl ( buf );
+
+	    // x = 1;
+	    x = my_strlen ( buf );
+	    printf ( "cmd: %d %s\n", x, buf );
+
+	    printf ( "---\n" );
+	    for ( p=buf; *p; p++ ) 
+		printf ( " %02x\n", *p );
+	    // delay_ms ( 2000 );
+	    // x++;
+	}
+}
+#endif
+
+static int
+my_cmp ( char *s1, char *s2 )
+{
+	while ( *s1 ) {
+	    if ( ! *s2 )
+		return 0;
+	    if ( *s1++ != *s2++ )
+		return 0;
+	}
+	if ( *s2 )
+	    return 0;
+	return 1;
+}
+
+void
+serial_cmd ( void )
+{
+	char buf[80];
+
+	for ( ;; ) {
+	    /* Wait for a command */
+	    printf ( "Command: " );
+	    serial_getl ( buf );
+
+	    if ( my_cmp ( buf, "rc" ) ) {
+		relay_closed ();
+	    } 
+	    else if ( my_cmp ( buf, "ro" ) ) {
+		relay_open ();
+	    }
+	    else if ( my_cmp ( buf, "ri" ) ) {
+		measure_rint ();
+	    }
+	    else if ( my_cmp ( buf, "t1" ) ) {
+		adc_test1 ();
+	    }
+	    else if ( my_cmp ( buf, "t2" ) ) {
+		adc_test2 ();
+	    }
+	    else if ( my_cmp ( buf, "t3" ) ) {
+		adc_test3 ();
+	    }
+	    else if ( my_cmp ( buf, "quit" ) ) {
+		printf ( "Done\n" );
+		break;
+	    }
+	    else {
+		int len = my_strlen ( buf );
+		printf ( "Got: %s (%d)\n", buf, len );
+	    }
+	}
+}
+
 void
 startup ( void )
 {
 	int t;
 	unsigned long systick_next;
-	int x;
-	char buf[80];
-	char *p;
 
 	rcc_init ();
 
@@ -285,6 +431,7 @@ startup ( void )
 	relay_open ();
 
 #ifdef notdef
+	/* This blinks a light or clicks a relay on A2 */
 	x = 0;
 	for ( ;; ) {
 	    delay_ms ( 1000 );
@@ -298,25 +445,12 @@ startup ( void )
 	}
 #endif
 
-	adc_test1 ();
+	// adc_test1 ();
 	// adc_test2 ();
 	// measure_rint ();
+	// serial_test ();
 
-#ifdef notdef
-	/* Wait for a command */
-	serial_getl ( buf );
-
-	// x = 1;
-	x = my_strlen ( buf );
-	for ( ;; ) {
-	    // printf ( "cmd: %d %s\n", x, buf );
-	    printf ( "---\n" );
-	    for ( p=buf; *p; p++ ) 
-		printf ( " %02x\n", *p );
-	    delay_ms ( 2000 );
-	    // x++;
-	}
-#endif
+	serial_cmd ();
 
 	serial_puts ( "Main is spinning\n" );
 
