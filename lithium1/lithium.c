@@ -110,19 +110,46 @@ read_bat ( int n )
 	for ( i=0; i<n; i++ ) {
 	    val = (adc_read() * 1000) / SCALE;
 	    sum += val;
-	    delay_ms (50);
+	    // delay_ms (50);
 	}
 
 	return sum / n;
 }
 
-/* We have a load resistor of 16.67 ohms.
+/* Do a reading with averaging */
+int
+read_avg ( int n )
+{
+	int i;
+	int sum;
+
+	sum = 0;
+	for ( i=0; i<n; i++ ) {
+	    sum += adc_read();
+	    // delay_ms (10);
+	}
+
+	return sum / n;
+}
+
+
+/* I have a load resistor of 16.67 ohms.
  * With the load attached the current is Vbat / 16.67
  * which for a 3.7 volt battery is 0.222 amps
- * This routine measure the voltage drop when we
+ * After 3 hours I can barely notice a resistor getting warm.
+ * (This resistor is actually three 50 ohm, 10W resistors in parallel.
+ *
+ * The problem (in so far as there is one) is that it takes most
+ *  of a day to discharge a cell at a 222 mA rate.
+ *  10 hours to discharge 2000 mAh at 200 mA.
+ * I am tempted to use a 10 ohm resistor, or
+ *  even two 10 ohm in parallel (5 ohms, pulling 800 mA)
+ *
+ * This routine measures the voltage drop when we
  * attach the load.  Rint = Vdrop / Iload or
  * Rint = Vdrop * 16.67 / Vbat
- * Scaling Rload by 1000 yields milliohms
+ * Scaling Rload by 1000 yields milliohms,
+ *  so this reads out directly in milliohms.
  */
 #define NAVG	20
 #define RLOAD	16667
@@ -274,6 +301,7 @@ adc_test1 ( void )
 
 #define T2_CHAN		1
 
+#ifdef TMP36
 /* On my breadboard this is a TMP36 temperature sensor.
  * This gives 750 mV at 25C, and changes 10 mV per C
  */
@@ -301,6 +329,44 @@ adc_test2 ( void )
 	    tf = tc * 18 / 10;
 	    tf += 320;
 	    printf ( "Temp (v,tc,tf): %d %d %d\n", val, tc, tf );
+	    delay_ms (10);
+	}
+}
+#endif
+
+#define T2_AVG		40
+#define T2_EXPECT	1227
+
+/* Now this is an LM385-1.2 voltage reference.
+ *  nominal 1.235 volts.  I measure 1.227 with my Fluke
+ */
+void
+adc_test2 ( void )
+{
+	int i;
+	int val;
+	int val2;
+	int save;
+
+	/* Make A1 an analog input */
+	gpio_a_analog ( T2_CHAN );
+
+	printf ( " ADC channel %d\n", T2_CHAN );
+	adc_set_chan ( T2_CHAN );
+
+	for ( i=0; i<5; i++ ) {
+	    val = read_avg ( T2_AVG );
+	    printf ( "LM385 voltage: %d\n", val );
+	    delay_ms (10);
+	}
+
+	save = read_avg ( 100 );
+
+	for ( i=0; i<5; i++ ) {
+	    val = read_avg ( T2_AVG );
+	    val2 = val * T2_EXPECT;
+	    val2 /= save;
+	    printf ( "LM385 voltage: %d %d\n", val, val2 );
 	    delay_ms (10);
 	}
 }
@@ -355,6 +421,61 @@ my_cmp ( char *s1, char *s2 )
 	return 1;
 }
 
+#define CHAN_BATTERY	0
+
+#define CAL_TICK	2000	/* 2 seconds */
+#define CAL_TICK_S	2	/* 2 seconds */
+#define CAL_SAFE	2950
+
+#define CAL_TERM	3000
+
+void
+calibrate ( void )
+{
+	int val;
+	int stat;
+	int i;
+	int time;
+
+	measure_rint ();
+
+	adc_set_chan ( CHAN_BATTERY );
+
+	time = 0;
+
+	/* Some readings before loading battery */
+	stat = 0;
+	for ( i=0; i<5; i++ ) {
+	    val = read_bat ( 10 );
+	    printf ( "%d %d %d\n", time, val, stat );
+	    delay_ms (CAL_TICK);
+	}
+
+	relay_closed ();
+	stat = 1;
+
+	for ( ;; ) {
+	    val = read_bat ( 10 );
+	    printf ( "%d %d %d\n", time, val, stat );
+	    if ( val < CAL_TERM )
+		break;
+	    if ( val < CAL_SAFE )
+		break;
+	    delay_ms (CAL_TICK);
+	    time += CAL_TICK_S;
+	}
+
+	relay_open ();
+	stat = 0;
+
+	for ( i=0; i<5; i++ ) {
+	    val = read_bat ( 10 );
+	    printf ( "%d %d %d\n", time, val, stat );
+	    delay_ms (CAL_TICK);
+	    time += CAL_TICK_S;
+	}
+}
+
 void
 serial_cmd ( void )
 {
@@ -382,6 +503,9 @@ serial_cmd ( void )
 	    }
 	    else if ( my_cmp ( buf, "t3" ) ) {
 		adc_test3 ();
+	    }
+	    else if ( my_cmp ( buf, "cal" ) ) {
+		calibrate ();
 	    }
 	    else if ( my_cmp ( buf, "quit" ) ) {
 		printf ( "Done\n" );

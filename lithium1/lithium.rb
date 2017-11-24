@@ -19,38 +19,59 @@ class Lithium
 	sleep 0.001
 	@ser.flush
     end
+    def puts ( msg )
+	msg.split(//).each { |b| sout b }
+    end
     def sin
 	@ser.read(1)
     end
+    # lines come ending with CR LF
+    # chomp gets rid of them both
     def gets
+	rv = ""
+	loop {
+	    x = sin
+	    #q = nil
+	    #x.each_byte { |b| q = b }
+	    #print "Got #{x.size} #{q}\n"
+	    rv << x
+	    break if x == "\n"
+	    return nil if rv == "Command"
+	}
+	rv.chomp 
     end
 end
 
+#logfile = File.new("battery.log", "w")
+logfile = File.new("battery.log", "a")
+
+tstamp = `date`
+puts tstamp
+logfile.puts tstamp
+
 l = Lithium.new
 
-#s.puts "abcd\r"
-#s.write "abcd\n\r"
+l.puts "cal\n"
 
-# Just this works -- sees \n
-# s.write "\r"
-
-# This works too.
-# s.write "\n"
-
-l.sout "a"
-l.sout "b"
-l.sout "c"
-l.sout "d"
-l.sout "\n"
+print "Starting -----------------------------------\n"
+logfile.puts "starting calibration"
 
 loop {
-    c = l.sin
-    putc c
+    line = l.gets
+    break unless line
+    puts line
+    logfile.puts line
+    #print "Line: #{line}\n"
+    #line.each_byte { |b| print "#{b}\n" }
 }
 
-loop {
-    l = @ser.gets
-    puts l
-}
+print "Done -----------------------------------\n"
+logfile.puts "calibration finished"
 
-puts "done"
+tstamp = `date`
+puts tstamp
+logfile.puts tstamp
+
+logfile.close
+
+# THE END
