@@ -151,8 +151,14 @@ read_avg ( int n )
  * Scaling Rload by 1000 yields milliohms,
  *  so this reads out directly in milliohms.
  */
-#define NAVG	20
+
+/*
 #define RLOAD	16667
+#define RLOAD	10000
+ */
+#define RLOAD	 5000
+
+#define NAVG	20
 
 void
 measure_rint ( void )
@@ -506,6 +512,9 @@ serial_cmd ( void )
 	    }
 	    else if ( my_cmp ( buf, "cal" ) ) {
 		calibrate ();
+	    }
+	    else if ( my_cmp ( buf, "check" ) ) {
+		printf ( "OK\n" );
 	    }
 	    else if ( my_cmp ( buf, "quit" ) ) {
 		printf ( "Done\n" );

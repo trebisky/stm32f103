@@ -1,0 +1,7 @@
+*.o
+*.elf
+*.bin
+*.dump
+*.swp
+zzz
+Data
