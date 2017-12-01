@@ -9,14 +9,19 @@
 
 # Only these first two were done with 16.67
 #infile = "battery1.log"
-infile = "battery2.log"
-resist = 16.667
+#infile = "battery2.log"
+#resist = 16.667
 
 #infile = "battery3.log"
 #infile = "battery4.log"
 #infile = "battery5.log"
+#infile = "Data/2017_11_29.dat"
+infile = "Data/2017_11_29b.dat"
 
-#resist = 5.0
+# Now this script is pretty much obsolete and
+# included in the lithium.rb script
+
+resist = 5.0
 
 sph = 60.0 * 60.0
 

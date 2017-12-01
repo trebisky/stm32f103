@@ -1,8 +1,9 @@
 #!/usr/bin/gnuplot -c
 set terminal png
-set output "battery5.png"
+set output "Data/2017_11_29b.png"
 #plot 'battery2.log' using 1:2 title 'Samsung ICR18650-26C 11-24-2017' with lines
 #plot 'battery2.log' using ($1/3600.0):($2/1000.0) title 'Samsung ICR18650-26C 11-24-2017' with lines
 #plot 'battery3.log' using ($1/3600.0):($2/1000.0) title 'Panasonic CGR18650CC 11-26-2017' with lines
 #plot 'battery4.log' using ($1/3600.0):($2/1000.0) title 'Sony US18650GR 11-27-2017' with lines
-plot 'battery5.log' using ($1/3600.0):($2/1000.0) title 'Sony US18650GR 11-28-2017' with lines
+#plot 'Data/battery5.log' using ($1/3600.0):($2/1000.0) title 'Sony US18650GR 11-28-2017' with lines
+plot 'Data/2017_11_29b.dat' using ($1/3600.0):($2/1000.0) title 'Sony US18650GR 11-29-2017' with lines

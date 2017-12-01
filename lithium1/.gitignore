@@ -5,3 +5,6 @@
 *.swp
 zzz
 Data
+zplot
+*.png
+*.dat
