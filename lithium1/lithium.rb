@@ -98,7 +98,7 @@ def mk_plot ( bat )
     f.close
 
     system "gnuplot <zplot"
-    #system "rm -f zplot"
+    system "rm -f zplot"
 end
 
 title = nil

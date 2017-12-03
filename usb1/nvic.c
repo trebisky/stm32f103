@@ -37,6 +37,43 @@ nvic_enable ( int irq )
 
 /* -------------------------------------- */
 
+struct scb {
+    volatile unsigned long cpuid;
+    volatile unsigned long icsr;
+    volatile unsigned long vtor;
+    volatile unsigned long aircr;
+    volatile unsigned long scr;
+    volatile unsigned long ccr;
+    volatile unsigned long shpr[3];
+    volatile unsigned long shcsr;
+    volatile unsigned long cfsr;
+    volatile unsigned long hfsr;
+    volatile unsigned long dfsr;
+    volatile unsigned long mmfar;
+    volatile unsigned long bfar;
+    volatile unsigned long afsr;
+};
+
+#define SCB_BASE	((struct scb *) 0xe000ed00)
+
+/* AIRCR  */
+#define AIRCR_RESET         0x05FA0000
+#define AIRCR_RESET_REQ     (AIRCR_RESET | 0x04);
+
+void
+hard_reset ( void )
+{
+	struct scb *sp = SCB_BASE;
+
+	sp->aircr = AIRCR_RESET_REQ;
+
+	/* NOTREACHED */
+	for ( ;; )
+	    ;
+}
+
+/* -------------------------------------- */
+
 /* The systick timer counts down to zero and then reloads.
  * It sets the flag each time it reaches 0.
  * This is a 24 bit timer (max reload is 0x00FFFFFF).
