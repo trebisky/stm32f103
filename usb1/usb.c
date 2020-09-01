@@ -8,6 +8,7 @@
  * a 16 bit bus.  This requires some care when making accesses from
  * the CPU.  The device registers can be accessed as 32 bit objects
  * that only have 16 active bits, so there is no confusion there.
+ *
  * However, the USB ram area can be confusing.  It presents a
  * contiguous series of 256 16-bit words to the USB, but when
  * viewed by the CPU, we see 256 16 bit words accessed as 32 bit
@@ -118,6 +119,13 @@ struct usb_desc {
 
 #define USB_MAX_BUF	64	/* 0x40 */
 
+#define RX_BLOCK_2	0x0000
+#define RX_BLOCK_32	0x8000
+
+/* We allocate one 32 byte block for Rx data */
+#define RX_BLOCK_SIZE	1
+#define RX_BLOCK_SHIFT	10
+
 /* These are from table 63 in section 11 of the ref. manual */
 #define	USB_HP_IRQ	19	/* high priority IRQ */
 #define	USB_LP_IRQ	20	/* low priority IRQ */
@@ -125,6 +133,7 @@ struct usb_desc {
 
 void	clear_usb_ram ( void );
 void	dump_usb_ram ( void );
+static void	pma_show ( void );
 
 /* Simulate a USB disconnect to get the hosts attention.
  * On our board, PA11 is USB D- and PA12 is USB D+
@@ -260,8 +269,7 @@ usb_reset ( char *msg )
 
 	descp = &USB_DESC[0];
 	descp->rx_addr = ENDP0_RX_ADDR;
-	// descp->rx_count = USB_MAX_BUF;
-	descp->rx_count = 0x1f << 10;
+	descp->rx_count = RX_BLOCK_32 | (RX_BLOCK_SIZE << RX_BLOCK_SHIFT);
 	descp->tx_addr = ENDP0_TX_ADDR;
 	// descp->tx_count = USB_MAX_BUF;
 	descp->tx_count = 0;
@@ -271,13 +279,43 @@ usb_reset ( char *msg )
 
 	printf ( "Endpoint reg 0 = %08x\n", up->epr[0] );
 
-	ep_rx_stat_write ( 0, EP_RX_VALID );
-	ep_tx_stat_write ( 0, EP_TX_STALL );
 	ep_type_write ( 0, EP_TYPE_CONTROL );
+	ep_tx_stat_write ( 0, EP_TX_STALL );
+	ep_rx_stat_write ( 0, EP_RX_VALID );
 
 	printf ( "Endpoint reg 0 = %08x\n", up->epr[0] );
 
 	up->daddr = DADDR_0 | DADDR_EF;
+
+	pma_show ();
+}
+
+// this software only ever uses endpoint 0
+//  the other registers are all zeros.
+// #define NUM_ENDP     8
+#define NUM_ENDP        1
+
+static void
+pma_show ( void )
+{
+        int i, j;
+        long *p;
+        short *sp;
+	struct usb *up = USB_BASE;
+
+        printf ( "BTABLE = %08x\n", up->btable );
+
+        p = USB_RAM;
+        sp = (short *) p;
+
+        for ( i=0; i<32; i++ ) {
+            printf ( "PMA %08x: ", sp );
+            for ( j=0; j<8; j++ ) {
+                printf ( "%04x ", *p++ );
+                sp++;
+            }
+            printf ( "\n" );
+        }
 }
 
 void
@@ -380,7 +418,9 @@ usb_lp_handler ( void )
 	}
 }
 
-/* We clear 2 bytes at a time using 4 byte accesses */
+/* We clear 2 bytes at a time using 4 byte accesses.
+ * There are 512 bytes.
+ */
 void
 clear_usb_ram ( void )
 {

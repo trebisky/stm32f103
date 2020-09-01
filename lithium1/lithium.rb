@@ -2,10 +2,25 @@
 
 # Tom Trebisky  11-18-2017
 
+# Run this by typing ./lithium1.rb xyz
+# This yields the data file Data/xyz.dat
+# 
+# This just dives in and starts the test,
+# it should be worked into a GUI that displays
+# initial voltage and has a stop/start button
+# and other nice things.
+# ** Also should search for serial port and
+# probe using some innocuous command, with timeout.
+#
+# The tester requires two USB cables.
+# One powers the device via the USB on the STM
+# The other does communication via a USB to serial module.
+
 require 'serialport'
 
-$port = "/dev/ttyUSB1"
-#$port = "/dev/ttyUSB2"
+#$port = "/dev/ttyUSB0"
+#$port = "/dev/ttyUSB1"
+$port = "/dev/ttyUSB2"
 
 $prompt = "Command: "
 $datadir = "Data"
@@ -168,10 +183,16 @@ l.puts "cal\n"
 print "Starting -----------------------------------\n"
 logfile.puts "# starting calibration"
 
+# R int = 161 (milliohms)
+
 time = 0
 sum = 0.0;
+save_rint = nil
 loop {
     line = l.gets
+    if line =~ /^# R int =/
+	save_rint = line
+    end
     break if line == $prompt
     puts line
     if line =~ /^[a-zA-Z]/
@@ -198,6 +219,10 @@ factor = 2.0 * 1000.0 / 60.0 / 60.0
 mah = sum * factor
 puts "# %.1f mAh" % mah
 logfile.puts "# %.1f mAh" % mah
+if save_rint
+    puts save_rint
+    logfile.puts save_rint
+end
 
 print "Done -----------------------------------\n"
 logfile.puts "# calibration finished"

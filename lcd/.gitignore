@@ -1,0 +1,7 @@
+*.o
+*.elf
+*.bin
+*.dump
+loader/loader
+*.swp
+zzz
