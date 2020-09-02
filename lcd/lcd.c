@@ -90,8 +90,13 @@ startup ( void )
 
 	rcc_init ();
 	serial_init ();
-	serial_putc ( '\r' );
+
 	serial_putc ( '\n' );
+
+	serial_puts ( "Hello\n" );
+	serial_puts ( "Joe\n" );
+
+	i2c_init ();
 
 #define A_BIT	7
 	// gpio_a_init ( A_BIT );
@@ -103,44 +108,6 @@ startup ( void )
 	 * So we toggle the output port at 500 kHz
 	 */
 	systick_init_int ( 72 );
-
-/* With this timer running, I see a waveform on A1, A2, A3 that is
- * 2 us high, 2 us low (250 kHz).
- * The timer I set up is indeed running at 250 kHz and is tim2
- * These pins are:
- *  A1 = PWM2/2
- *  A2 = PWM2/3
- *  A3 = PWM2/4
- */
-	// timer_init ();
-
-	// led_demo ();
-
-#ifdef notdef
-	/* This yields a 1.34 Mhz waveform with a 72 Mhz clock */
-	for ( ;; ) {
-	    led_on ();
-	    led_off ();
-	}
-#endif
-
-#ifdef notdef
-	/* This runs a bit faster, yielding 1.44 Mhz */
-	for ( ;; ) {
-	    gpio_c_set ( PC13, 0 );
-	    gpio_c_set ( PC13, 1 );
-	}
-#endif
-
-#ifdef notdef
-	led_on ();
-
-	/* This gives a nice clean waveform at 1.24 Mhz */
-	for ( ;; ) {
-	    gpio_a_set ( A_BIT, 0 );
-	    gpio_a_set ( A_BIT, 1 );
-	}
-#endif
 
 	for ( ;; ) {
 #ifdef notdef

@@ -92,6 +92,7 @@ serial_puts ( char *s )
 
 #define PUTCHAR(x)      *buf++ = (x)
 
+/* single byte as xx */
 static char *
 shex2( char *buf, int val )
 {
@@ -100,6 +101,7 @@ shex2( char *buf, int val )
         return buf;
 }
 
+/* "short" as xxyy */
 static char *
 shex4( char *buf, int val )
 {
@@ -107,6 +109,7 @@ shex4( char *buf, int val )
         return shex2(buf,val);
 }
 
+/* "long" as aabbxxyy */
 static char *
 shex8( char *buf, int val )
 {

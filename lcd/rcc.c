@@ -39,8 +39,13 @@ struct rcc {
 #define TIMER2_ENABLE	0x0001
 #define TIMER3_ENABLE	0x0002
 #define TIMER4_ENABLE	0x0004
+
 #define UART2_ENABLE	0x20000
 #define UART3_ENABLE	0x40000
+
+#define I2C1_ENABLE	0x200000	/* bit 21 */
+#define I2C2_ENABLE	0x400000	/* bit 22 */
+#define USB_ENABLE	0x800000	/* bit 23 */
 
 /* The apb2 and apb1 registers hold reset control bits */
 
@@ -159,11 +164,12 @@ rcc_init ( void )
 	/* Turn on USART 1 */
 	rp->ape2 |= UART1_ENABLE;
 
-	rp->ape1 |= TIMER2_ENABLE;
-
 	// rp->ape1 |= UART2_ENABLE;
 	// rp->ape1 |= UART3_ENABLE;
 
+	rp->ape1 |= TIMER2_ENABLE;
+	rp->ape1 |= I2C1_ENABLE;
+	rp->ape1 |= I2C2_ENABLE;
 }
 
 /* THE END */

@@ -38,15 +38,14 @@ locore.o:	locore.s
 .c.o:
 	$(CC) -o $@ -c $<
 
-OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
+# This is what we expect
+#OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
+# Some newer chips are shipping with a idcode of 0x2ba01477, this will make them work.
+OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/cs32f1x.cfg
 
 # This works great once I fixed the base address in the LDS file
-flash:	lcd.elf
+flash:  lcd.elf
 	openocd $(OCDCFG) -c "program lcd.elf verify reset exit"
-
-# No need for this now that the above works
-bflash:	lcd.bin
-	openocd $(OCDCFG) -c "program lcd.bin verify reset exit 0x08000000"
 
 gdb:
 	$(GDB) --eval-command="target remote localhost:3333" lcd.elf
