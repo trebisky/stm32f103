@@ -97,7 +97,7 @@ startup ( void )
 	// gpio_a_init ( A_BIT );
 
 	led_init ( PC13 );
-	led_off ();
+	led_on ();
 
 	/* This gives us a 1 us interrupt rate !
 	 * So we toggle the output port at 500 kHz
@@ -112,7 +112,7 @@ startup ( void )
  *  A2 = PWM2/3
  *  A3 = PWM2/4
  */
-	// timer_init ();
+	timer_init ();
 
 	// led_demo ();
 
@@ -141,6 +141,8 @@ startup ( void )
 	    gpio_a_set ( A_BIT, 1 );
 	}
 #endif
+
+	serial_puts ( "Spinning\n" );
 
 	for ( ;; ) {
 #ifdef notdef

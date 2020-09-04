@@ -154,4 +154,25 @@ gpio_timer ( void )
 	gpio_mode ( GPIOA_BASE, 3, OUTPUT_50M | ALT_PUSH_PULL );
 }
 
+void
+gpio_i2c1 ( void )
+{
+	gpio_mode ( GPIOB_BASE, 8, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOB_BASE, 9, OUTPUT_50M | ALT_PUSH_PULL );
+}
+
+void
+gpio_i2c1_alt ( void )
+{
+	gpio_mode ( GPIOB_BASE, 6, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOB_BASE, 7, OUTPUT_50M | ALT_PUSH_PULL );
+}
+
+void
+gpio_i2c2 ( void )
+{
+	gpio_mode ( GPIOB_BASE, 10, OUTPUT_50M | ALT_PUSH_PULL );
+	gpio_mode ( GPIOB_BASE, 11, OUTPUT_50M | ALT_PUSH_PULL );
+}
+
 /* THE END */

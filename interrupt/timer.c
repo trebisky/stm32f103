@@ -64,7 +64,7 @@ struct timer {
 
 /* On page 92 of the reference manual is the all important clock diagram.
  * It shows that Timer 1 gets the raw PCLK2 (72 Mhz) unscaled.
- * However Timers 2,3,4 get PCKL1 * 2 (36*2) = 72 Mhz.
+ * However Timers 2,3,4 get PKCL1 * 2 (36*2) = 72 Mhz.
  * So all the timers get a 72 Mhz clock the way I set things up.
  * And experiment bears this out for Timer 2.
  */
@@ -76,8 +76,14 @@ struct timer {
  * A downcounting timer counts from the ARR value to 0.
  */
 
+enum ttest { TEST1, TEST2, TEST3 };
+
+static enum ttest cur_test = TEST1;
+
 static int talk;
 static int tcount;
+
+static int led_state = 0;
 
 /* Interrupt handler */
 void
@@ -87,16 +93,27 @@ tim2_handler ( void )
 
 	tp->sr = 0;	/* cancel the interrupt */
 
-	if ( talk == 0 )
-	    return;
+	if ( cur_test == TEST3 ) {
+	    if ( led_state ) {
+		led_state = 0;
+		led_on ();
+	    } else {
+		led_state = 1;
+		led_off ();
+	    }
+	} else {
+	    /* TEST1 */
+	    if ( talk == 0 )
+		return;
 
-	serial_putc ( '0' + tcount );
-	// serial_putc ( 'A' + tcount );
-	if ( ++tcount > 50 ) {
-	    // tp->cr1 = 0;
-	    // tp->dier = 0;
-	    serial_puts ( " DONE" );
-	    talk = 0;
+	    serial_putc ( '0' + tcount );
+	    // serial_putc ( 'A' + tcount );
+	    if ( ++tcount > 50 ) {
+		// tp->cr1 = 0;
+		// tp->dier = 0;
+		serial_puts ( " DONE" );
+		talk = 0;
+	    }
 	}
 }
 
@@ -179,11 +196,38 @@ test2 ( void )
 	tp->cr1 = CR1_ENABLE;
 }
 
+/* This is the old test1, but we set things
+ * up to blink the on-board LED
+ * 
+ * PSC is the prescaler.
+ * ARR is the auto reload register.
+ * note that this is a 16 bit timer, so max load is 65535
+ *
+ * Indeed, this works fine and blinks the LED at a nice rate.
+ *  9-4-2020  This confirms that some peripheral on APB1 is working.
+ */
+static void
+test3 ( void )
+{
+	struct timer *tp = TIMER2_BASE;
+
+	cur_test = TEST3;
+
+	tp->arr = 2000;		/* 0x7d0 */
+	tp->psc = 5000;
+
+	nvic_enable ( TIMER2_IRQ );
+	tp->dier = UPDATE_IE;
+
+	tp->cr1 = CR1_ENABLE;
+}
+
 void
 timer_init ( void )
 {
 	// test1 ();
-	test2 ();
+	// test2 ();
+	test3 ();
 }
 
 /* THE END */

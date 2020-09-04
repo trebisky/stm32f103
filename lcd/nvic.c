@@ -91,10 +91,12 @@ void
 systick_handler ( void )
 {
 	if ( ss ) {
-	    gpio_a_set ( A_BIT, 0 );
+	    // gpio_a_set ( A_BIT, 0 );
+	    led_on ();
 	    ss = 0;
 	} else {
-	    gpio_a_set ( A_BIT, 1 );
+	    // gpio_a_set ( A_BIT, 1 );
+	    led_off ();
 	    ss = 1;
 	}
 }
@@ -116,6 +118,7 @@ systick_init_int ( int val )
 {
 	struct systick *sp = SYSTICK_BASE;
 
+	show32 ( "systick: ", val );
 	systick_init ( val );
 	sp->csr = TICK_SYSCLK | TICK_ENABLE | TICK_INTPEND;
 

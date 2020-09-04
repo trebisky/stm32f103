@@ -131,4 +131,61 @@ show16 ( char *s, int val )
 	serial_putc ( '\n' );
 }
 
+static void
+print32 ( int val )
+{
+	char buf[9];
+
+	shex8 ( buf, val );
+	buf[8] = '\0';
+	serial_puts ( buf );
+}
+
+void
+show32 ( char *s, int val )
+{
+	serial_puts ( s );
+	print32 ( val );
+	serial_putc ( '\n' );
+}
+
+void
+show_reg ( char *msg, int *addr )
+{
+	serial_puts ( msg );
+	serial_putc ( ' ' );
+	print32 ( (int) addr );
+	serial_putc ( ' ' );
+	print32 ( *addr );
+	serial_putc ( '\n' );
+}
+
+/* Just for fun, recursive base 10 print
+ */
+void
+printn ( int x )
+{
+	int d;
+
+	if ( x == 0 )
+	    return;
+	if ( x < 0 ) {
+	    serial_putc ( '-' );
+	    printn ( -x );
+	    return;
+	}
+	d = x % 10;
+	printn ( x / 10 );
+	serial_putc ( '0' + d );
+}
+
+void
+show_n ( char *s, int val )
+{
+	serial_puts ( s );
+	serial_putc ( ' ' );
+	printn ( val );
+	serial_putc ( '\n' );
+}
+
 /* THE END */

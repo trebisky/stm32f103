@@ -2,16 +2,18 @@
  * (c) Tom Trebisky  7-2-2017
  */
 
+#define BIT(nr)		(1<<(nr))
+
 /* The reset and clock control module */
 struct rcc {
 	volatile unsigned long ccr;	/* 0 - clock control */
 	volatile unsigned long cfg;	/* 4 - clock config */
 	volatile unsigned long cir;	/* 8 - clock interrupt */
-	volatile unsigned long apb2;	/* 0c - peripheral reset */
-	volatile unsigned long apb1;	/* 10 - peripheral reset */
-	volatile unsigned long ape3;	/* 14 - peripheral enable */
-	volatile unsigned long ape2;	/* 18 - peripheral enable */
-	volatile unsigned long ape1;	/* 1c - peripheral enable */
+	volatile unsigned long apb2_rr;	/* 0c - peripheral reset */
+	volatile unsigned long apb1_rr;	/* 10 - peripheral reset */
+	volatile unsigned long ahb_enr;	/* 14 - peripheral enable */
+	volatile unsigned long apb2_enr;	/* 18 - peripheral enable */
+	volatile unsigned long apb1_enr;	/* 1c - peripheral enable */
 	volatile unsigned long bdcr;	/* 20 - xx */
 	volatile unsigned long csr;	/* 24 - xx */
 };
@@ -28,14 +30,16 @@ struct rcc {
 #define FLASH_WAIT2	0x0002	/* for 48 < sysclk <= 72 Mhz */
 
 
-/* These are in the ape2 register */
+/* These are in the apb2_enr register */
 #define GPIOA_ENABLE	0x04
 #define GPIOB_ENABLE	0x08
 #define GPIOC_ENABLE	0x10
+#define AFIO_ENABLE	0x01
+
 #define TIMER1_ENABLE	0x0800
 #define UART1_ENABLE	0x4000
 
-/* These are in the ape1 register */
+/* These are in the apb1_enr register */
 #define TIMER2_ENABLE	0x0001
 #define TIMER3_ENABLE	0x0002
 #define TIMER4_ENABLE	0x0004
@@ -43,11 +47,12 @@ struct rcc {
 #define UART2_ENABLE	0x20000
 #define UART3_ENABLE	0x40000
 
+// #define I2C1_ENABLE	BIT(21)
 #define I2C1_ENABLE	0x200000	/* bit 21 */
 #define I2C2_ENABLE	0x400000	/* bit 22 */
 #define USB_ENABLE	0x800000	/* bit 23 */
 
-/* The apb2 and apb1 registers hold reset control bits */
+/* The apb2_rr and apb1_rr registers hold reset control bits */
 
 /* Bits in the clock control register CCR */
 #define PLL_ENABLE	0x01000000
@@ -157,19 +162,31 @@ rcc_init ( void )
 	rcc_clocks ();
 
 	/* Turn on all the GPIO */
-	rp->ape2 |= GPIOA_ENABLE;
-	rp->ape2 |= GPIOB_ENABLE;
-	rp->ape2 |= GPIOC_ENABLE;
+	rp->apb2_enr |= GPIOA_ENABLE;
+	rp->apb2_enr |= GPIOB_ENABLE;
+	rp->apb2_enr |= GPIOC_ENABLE;
+	rp->apb2_enr |= AFIO_ENABLE;
 
-	/* Turn on USART 1 */
-	rp->ape2 |= UART1_ENABLE;
+	rp->apb2_enr |= UART1_ENABLE;
 
-	// rp->ape1 |= UART2_ENABLE;
-	// rp->ape1 |= UART3_ENABLE;
+	rp->apb1_enr |= UART2_ENABLE;
+	rp->apb1_enr |= UART3_ENABLE;
 
-	rp->ape1 |= TIMER2_ENABLE;
-	rp->ape1 |= I2C1_ENABLE;
-	rp->ape1 |= I2C2_ENABLE;
+	rp->apb1_enr |= TIMER2_ENABLE;
+	rp->apb1_enr |= I2C1_ENABLE;
+	rp->apb1_enr |= I2C2_ENABLE;
+}
+
+void
+rcc_show ( void )
+{
+	struct rcc *rp = RCC_BASE;
+
+	show_reg ( "apb1 reset:", &rp->apb1_rr );
+	show_reg ( "apb2 reset:", &rp->apb2_rr );
+	show_reg ( "apb1 ena:", &rp->apb1_enr );
+	show_reg ( "apb2 ena:", &rp->apb2_enr );
+	show_reg ( "ahb  ena:", &rp->ahb_enr );
 }
 
 /* THE END */

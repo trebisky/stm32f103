@@ -1,24 +1,11 @@
-/* inter.c
- * (c) Tom Trebisky  7-7-2017
+/* lcd.c
+ * (c) Tom Trebisky  9-2-2020
  *
- * Interrupt demo.
- * This sets up Timer 2 and then sends a sequence of characters
- * out on the Uart, one per timer tick.
+ * i2c demo.
+ * This began as the interrupt demo and added i2c code.
  *
- * This has been kind of a test bed for a number of things:
- *
- *  -- getting the clock to run at 72 Mhz
- *  -- getting any kind of interrupt to work
- *  -- getting uart output
- *  -- getting the timer to do something
- *  -- getting output waveforms on some A port pin
- *  -- getting interrupts from sysclk
- *
- * Note that uart1 is on pins A9 and A10
- *  (it could alternately be on pins B6 and B7)
- *
- *  Uart 2 could be on pins A2 and A3
- *  Uart 3 could be on pins B10 and B11
+ * I use the systick interrupt to blink the onboard LED as
+ *  a sanity check.
  */
 
 void rcc_init ( void );
@@ -83,23 +70,15 @@ led_demo ( void )
 void
 startup ( void )
 {
-	int count = 0;
-	int t;
-	// int tmin = 0xffff;
-	// int tmax = 0;
-
 	rcc_init ();
 	serial_init ();
 
 	serial_putc ( '\n' );
+	serial_puts ( "Starting\n" );
 
-	serial_puts ( "Hello\n" );
-	serial_puts ( "Joe\n" );
+	rcc_show ();
 
 	i2c_init ();
-
-#define A_BIT	7
-	// gpio_a_init ( A_BIT );
 
 	led_init ( PC13 );
 	led_off ();
@@ -107,23 +86,22 @@ startup ( void )
 	/* This gives us a 1 us interrupt rate !
 	 * So we toggle the output port at 500 kHz
 	 */
-	systick_init_int ( 72 );
+	// systick_init_int ( 72 );
+
+	/* Try for 1 Hz - 0x044aa200 won't fit in 24 bits */
+	// systick_init_int ( 72*1000*1000 );
+
+	/* This give a happy LED blink rate,
+	 *  and confirms that some kind of interrupt
+	 *  is getting handled properly
+	 * The value is 16,777,215
+	 */
+	systick_init_int ( 0xffffff );
+	show_n ( "Systick: ", 0xffffff );
+
+	serial_puts ( "Spinning\n" );
 
 	for ( ;; ) {
-#ifdef notdef
-	    if ( (++count % 16) == 0 )
-		led_show ();
-	    // serial_putc ( 'a' );
-	    // serial_putc ( 'A' );
-	    big_delay ();
-	    /*
-	    t = timer_get();
-	    if ( t < tmin ) tmin = t;
-	    if ( t > tmax ) tmax = t;
-	    show16 ( "Min ", tmin );
-	    show16 ( "Max ", tmax );
-	    */
-#endif
 	}
 }
 
