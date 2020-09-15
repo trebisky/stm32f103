@@ -18,3 +18,8 @@ and hearty encouragment.  He is doing the same sorts of things with the
 same gadgets:
 
 https://github.com/dwelch67/stm32_samples/tree/master/STM32F103C8T6
+
+Note that many of the early examples have a naive linker script
+(lds file) which does not initialize BSS or global variables at all.
+Later examples require this.  The presence of startup.c should be
+an indicator of more sophisticated and proper treatement.
