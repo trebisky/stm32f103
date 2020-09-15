@@ -18,10 +18,14 @@ LD = $(TOOLS)-ld.bfd
 OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
+OBJDUMP = $(TOOLS)-objdump
 
 OBJS = locore.o startup.o mem.o rcc.o gpio.o serial.o timer.o
 
 all: mem.elf mem.dump
+
+od:
+	$(OBJDUMP) -h mem.elf
 
 mem.dump:	mem.elf
 	$(DUMP) mem.elf >mem.dump

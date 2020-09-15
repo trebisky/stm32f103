@@ -1,4 +1,4 @@
-/* talk.c
+/* mem.c
  * (c) Tom Trebisky  7-2-2017
  *
  */
@@ -19,6 +19,13 @@ delay ( void )
 
 	while ( count-- )
 	    ;
+}
+
+static void
+ndelay ( int n )
+{
+	while ( n-- )
+	    delay ();
 }
 
 /* We scale the above to try to get a 500 ms delay */
@@ -61,10 +68,31 @@ led_demo ( void )
 	}
 }
 
-#define BS	128
+static void
+spin ( void )
+{
+	for ( ;; ) {
+	    // led_show ();
+	    ndelay ( 20 );
+	}
+}
 
+/* This goes into BSS and needs to be zeroed */
+#define BS	128
 char in_bss[BS]; 
 
+/* On the first cut, this was in flash at 0x080005dc
+ * so the value is correct, but don't try to modify it
+ * or you get a major fault.
+ * After adding a .data section to the lds file
+ * this goes to 0x2000008C, but with random contents.
+ * I add the routine to copy from __text_end onward,
+ * and it works once I make sure that .rodata follows
+ * .data !!
+ */
+int xyz = 1234;
+
+extern int __text_end;
 void
 main ( void )
 {
@@ -90,6 +118,17 @@ main ( void )
 	serial_puts ( "Starting ...\n" );
 	for ( p = (int *) in_bss; p < (int *) &in_bss[BS]; p++ )
 	    show_reg ( "In BSS: ", p );
+
+	show_n ( "xyz = ", xyz );
+	show_reg ( "xyz ... ", &xyz );
+
+	init_vars ();
+	show_reg ( "__text_end ", &__text_end );
+
+	show_n ( "xyz = ", xyz );
+	show_reg ( "xyz ... ", &xyz );
+
+	spin ();
 }
 
 /* THE END */
