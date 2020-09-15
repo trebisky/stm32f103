@@ -78,7 +78,7 @@ spin ( void )
 }
 
 /* This goes into BSS and needs to be zeroed */
-#define BS	128
+#define BS	32
 char in_bss[BS]; 
 
 /* On the first cut, this was in flash at 0x080005dc
@@ -119,11 +119,16 @@ main ( void )
 	for ( p = (int *) in_bss; p < (int *) &in_bss[BS]; p++ )
 	    show_reg ( "In BSS: ", p );
 
+#ifdef notdef
+	/* now that it is debugged, init_vars() is built in
+	 * to the code in startup.c that runs before main()
+	 */
 	show_n ( "xyz = ", xyz );
 	show_reg ( "xyz ... ", &xyz );
 
 	init_vars ();
 	show_reg ( "__text_end ", &__text_end );
+#endif
 
 	show_n ( "xyz = ", xyz );
 	show_reg ( "xyz ... ", &xyz );
