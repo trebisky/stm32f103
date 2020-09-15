@@ -16,10 +16,6 @@
  * i2c1 can appear in two places
  * B8 and B9 -- B8 = SCL,  B9 = SDA
  * B6 and B7 -- B6 = SCL,  B7 = SDA
- *
- * The default location is B6 and B7
- * If you want it on B8 and B9, you need to set an afio_remap bit.
- *
  * i2c2 can appear only in one place.
  * B10 = SCL,  B11 = SDA
  *
@@ -197,13 +193,6 @@ init_i2c_hw ( int device )
 	int cr;
 	int fast = 0;
 
-	if ( device == 0 ) {
-	    gpio_i2c1 ();
-	    // gpio_i2c1_alt ();
-	} else {
-	    gpio_i2c2 ();
-	}
-
 	icp = i2c_softc[device].base;
 
 	  i2c_showr ( icp );
@@ -221,10 +210,8 @@ init_i2c_hw ( int device )
 
 	init_i2c_clocks ( device, fast );
 
-	/* enable all interrupts */
 	icp->cr2 |= CR2_ALL_INT_ENA;
 
-	/* enable the chip */
 	// icp->cr1 |= CR1_ENABLE;
 	icp->cr1 = CR1_ENABLE;
 
@@ -244,18 +231,14 @@ test_i2c ( int device )
 
 	show16 ( "Testing i2c: ", device );
 
+	if ( device == 0 ) {
+	    gpio_i2c1 ();
+	    // gpio_i2c1_alt ();
+	} else {
+	    gpio_i2c2 ();
+	}
+
 	init_i2c_hw ( device );
-}
-
-/* ---------------------------------- */
-
-#define DAC_I2C_DEVICE	1
-
-static void
-test_dac ( void )
-{
-	serial_puts ( "Begin DAC test on i2c\n" );
-	init_i2c_hw ( DAC_I2C_DEVICE );
 }
 
 /* -------------------------------------------- */
@@ -274,13 +257,6 @@ void
 i2c_debug ( void )
 {
 	i2c_showr ( i2c_softc[TEST_DEVICE].base );
-}
-
-/* Called from main */
-void
-i2c_test ( void )
-{
-	test_dac ();
 }
 
 /* THE END */

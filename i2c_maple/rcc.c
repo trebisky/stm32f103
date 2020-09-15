@@ -36,7 +36,6 @@ struct rcc {
 #define GPIOC_ENABLE	0x10
 #define AFIO_ENABLE	0x01
 
-#define SPI1_ENABLE	0x1000
 #define TIMER1_ENABLE	0x0800
 #define UART1_ENABLE	0x4000
 
@@ -168,7 +167,6 @@ rcc_init ( void )
 	rp->apb2_enr |= GPIOC_ENABLE;
 	rp->apb2_enr |= AFIO_ENABLE;
 
-	rp->apb2_enr |= SPI1_ENABLE;
 	rp->apb2_enr |= UART1_ENABLE;
 
 	rp->apb1_enr |= UART2_ENABLE;
@@ -178,20 +176,20 @@ rcc_init ( void )
 	rp->apb1_enr |= I2C1_ENABLE;
 	rp->apb1_enr |= I2C2_ENABLE;
 
-	// Brute force during some grim debugging
-	// rp->apb1_enr = 0xffffffff;
-	// rp->apb2_enr = 0xffffffff;
+	rp->apb1_enr = 0xffffffff;
+	rp->apb2_enr = 0xffffffff;
 }
 
 #define I2C1_RESET	0x00200000	/* bit 21 */
 #define I2C2_RESET	0x00400000	/* bit 22 */
 
-/* XXX - reset both ??? */
 void
 i2c_reset ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
+	rp->apb1_rr = (I2C1_RESET | I2C2_RESET);
+	rp->apb1_rr = (I2C1_RESET | I2C2_RESET);
 	rp->apb1_rr = (I2C1_RESET | I2C2_RESET);
 	rp->apb1_rr = (I2C1_RESET | I2C2_RESET);
 	rp->apb1_rr = 0;

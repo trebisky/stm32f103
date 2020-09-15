@@ -54,7 +54,7 @@
 .word	bogus		/* IRQ 25 -- Timer 1 update */
 .word	bogus		/* IRQ 26 -- Timer 1 trig */
 .word	bogus		/* IRQ 27 -- Timer 1 cc */
-.word	tim2_handler	/* IRQ 28 -- Timer 2 */
+.word	tim2_handler		/* IRQ 28 -- Timer 2 */
 .word	bogus		/* IRQ 29 -- Timer 3 */
 .word	bogus		/* IRQ 30 -- Timer 4 */
 .word	i2c1_ev_handler		/* IRQ 31 */
@@ -63,9 +63,9 @@
 .word	i2c2_er_handler		/* IRQ 34 */
 .word	bogus		/* IRQ 35 */
 .word	bogus		/* IRQ 36 */
-.word	bogus		/* IRQ 37 -- UART 1 */
-.word	bogus		/* IRQ 38 -- UART 2 */
-.word	bogus		/* IRQ 39 -- UART 3 */
+.word	serial1_handler		/* IRQ 37 -- UART 1 */
+.word	serial2_handler		/* IRQ 38 -- UART 2 */
+.word	serial3_handler		/* IRQ 39 -- UART 3 */
 .word	bogus		/* IRQ 40 */
 .word	bogus		/* IRQ 41 */
 .word	bogus		/* IRQ 42 */

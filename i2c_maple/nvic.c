@@ -14,6 +14,44 @@
  *  0xE000EFD0 - ID space
  */
 
+void
+bogus_nmi ( void )
+{
+	serial_puts ( "Bogus NMI exception, spinning ... \n" );
+	for ( ;; ) ;
+}
+void
+bogus_hf ( void )
+{
+	serial_puts ( "Bogus HF exception, spinning ... \n" );
+	for ( ;; ) ;
+}
+void
+bogus_mm ( void )
+{
+	serial_puts ( "Bogus MM exception, spinning ... \n" );
+	for ( ;; ) ;
+}
+void
+bogus_bus ( void )
+{
+	serial_puts ( "Bogus BUS exception, spinning ... \n" );
+	for ( ;; ) ;
+}
+void
+bogus ( void )
+{
+	serial_puts ( "Bogus exception, spinning ... \n" );
+	for ( ;; ) ;
+}
+
+void
+bogus_irq ( void )
+{
+	serial_puts ( "Bogus IRQ, spinning ... \n" );
+	for ( ;; ) ;
+}
+
 struct nvic {
 	volatile unsigned long iser[3];	/* 00 */
 	volatile unsigned long icer[3];	/* 0c */
@@ -33,6 +71,37 @@ nvic_enable ( int irq )
 	    return;
 
 	np->iser[irq/32] = 1 << (irq%32);
+}
+
+/* -------------------------------------- */
+
+/* ARM system control block */
+
+struct scb {
+	volatile unsigned int cpuid;	/* 00 */
+	volatile unsigned int icsr;	/* 04 */
+	volatile unsigned int vtor;	/* 08 */
+	volatile unsigned int aircr;	/* 0c */
+	volatile unsigned int scr;	/* 10 */
+	volatile unsigned int ccr;	/* 14 */
+	volatile unsigned int shp[12];	/* 18 */
+	volatile unsigned int cshcsr;
+	volatile unsigned int cfsr;
+	volatile unsigned int hfsr;
+	volatile unsigned int dfsr;
+	volatile unsigned int mmfar;
+	volatile unsigned int bfar;
+};
+
+#define SCB_BASE ((struct scb *) 0xE000ED00)
+
+/* Allow unaligned accesses */
+void
+scb_unaligned ( void )
+{
+	struct scb *sp = SCB_BASE;
+
+	sp->ccr |= 0x0008;	/* bit 3 */
 }
 
 /* -------------------------------------- */
@@ -85,10 +154,10 @@ int ss = 0;
 
 #define A_BIT	7
 
-/* This is spliced into the table in locore.s
+/* The actual handler is now in glue.c
  */
 void
-systick_handler ( void )
+systick_handler_ORIG ( void )
 {
 	if ( ss ) {
 	    // gpio_a_set ( A_BIT, 0 );
@@ -124,8 +193,7 @@ systick_init_int ( int val )
 	systick_init ( val );
 	sp->csr = TICK_SYSCLK | TICK_ENABLE | TICK_INTPEND;
 
-	/* XXX */
-	gpio_a_init ( A_BIT );
+	// gpio_a_init ( A_BIT );
 }
 
 void

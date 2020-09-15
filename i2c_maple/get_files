@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cp /u1/Projects/STM32/libmaple/libmaple/include/libmaple/*.h libmaple
+cp /u1/Projects/STM32/libmaple/libmaple/stm32f1/include/series/*.h libmaple/series

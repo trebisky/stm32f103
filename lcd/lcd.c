@@ -68,10 +68,33 @@ led_demo ( void )
 }
 
 void
+spinner ( void )
+{
+	serial_puts ( "Spinning\n" );
+
+	for ( ;; ) {
+	}
+}
+
+void
+spinner2 ( void )
+{
+	int c;
+
+	serial_puts ( "Ready\n" );
+
+	for ( ;; ) {
+	    c = serial_getc ();
+	    // i2c_debug ();
+	}
+}
+
+void
 startup ( void )
 {
 	rcc_init ();
 	serial_init ();
+	rcc_show ();
 
 	serial_putc ( '\n' );
 	serial_puts ( "Starting\n" );
@@ -96,13 +119,13 @@ startup ( void )
 	 *  is getting handled properly
 	 * The value is 16,777,215
 	 */
-	systick_init_int ( 0xffffff );
-	show_n ( "Systick: ", 0xffffff );
 
-	serial_puts ( "Spinning\n" );
+	// systick_init_int ( 0xffffff );
 
-	for ( ;; ) {
-	}
+	// spinner ();
+	// spinner2 ();
+	// serial_test ();
+	i2c_test ();
 }
 
 /* THE END */

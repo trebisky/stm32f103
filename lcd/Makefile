@@ -19,7 +19,7 @@ OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
-OBJS = locore.o lcd.o nvic.o rcc.o gpio.o serial.o timer.o i2c.o
+OBJS = locore.o lcd.o nvic.o rcc.o afio.o gpio.o serial.o timer.o i2c.o
 
 all: lcd.elf lcd.dump
 
