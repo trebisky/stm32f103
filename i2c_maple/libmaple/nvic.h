@@ -119,10 +119,12 @@ void nvic_sys_reset();
  * @param irq_num Interrupt to enable
  */
 static inline void nvic_irq_enable(nvic_irq_num irq_num) {
+    show_n ( "NVIC_irq_enable: ", irq_num );
     if (irq_num < 0) {
         return;
     }
     NVIC_BASE->ISER[irq_num / 32] = BIT(irq_num % 32);
+    show_reg ( "NVIC iser: ", &NVIC_BASE->ISER[irq_num / 32] );
 }
 
 /**

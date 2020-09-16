@@ -1,11 +1,23 @@
-/* lcd.c
- * (c) Tom Trebisky  9-2-2020
+/* i2c_maple -- dac.c
+ * (c) Tom Trebisky  9-15-2020
  *
- * i2c demo.
- * This began as the interrupt demo and added i2c code.
+ * This is what I call a "maple-ectomy"
+ * The goal is to pull the i2c driver out of libmaple and
+ *  make it work in my own environment.
+ * I was able to successfully build the MCP4725 dac demo
+ *  using the libmaple environment.  My idea was that the
+ *  i2c code was C only and without too many dependencies.
  *
- * I use the systick interrupt to blink the onboard LED as
- *  a sanity check.
+ * I began with my interrupt demo and then brought in the
+ *  two files that contain the i2c driver.
+ * I copied the include file collection lock stock and barrel
+ *  in the libmaple subdirectory.
+ *
+ * This is turning into an interesting education.
+ * The first big thing I encountered once I got it to compile
+ *  and link was that my lds file had no allowance for the
+ *  initialization of BSS and variables, so that needed to be
+ *  addressed (It is not that hard, and needed to be done someday).
  */
 
 void rcc_init ( void );
@@ -17,6 +29,7 @@ void led_off ( void );
 /* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
  *  so the delay is about 185 ms
  * With a 72 Mhz clock this yields a 27.75 ms delay
+ *  (confirmed using systick)
  */
 void
 delay ( void )
@@ -28,6 +41,7 @@ delay ( void )
 }
 
 /* We scale the above to try to get a 500 ms delay */
+/* Now a 75 ms delay with a 72 Mhz clock */
 void
 big_delay ( void )
 {
@@ -71,11 +85,6 @@ led_demo ( void )
 /* ------------------------------------------------ */
 /* ------------------------------------------------ */
 
-void i2c1_ev_handler () { serial_puts ( "1_ev\n" ); }
-void i2c1_er_handler () { serial_puts ( "1_er\n" ); }
-void i2c2_ev_handler () { serial_puts ( "2_ev\n" ); }
-void i2c2_er_handler () { serial_puts ( "2_er\n" ); }
-
 #include "libmaple/i2c.h"
 
 #define MCP_ADDR         0x60
@@ -91,6 +100,17 @@ static i2c_msg write_msg;
 
 static char read_msg_data[5];
 static i2c_msg read_msg;
+
+static void
+mcp_fail ( char *msg )
+{
+    serial_puts ( "MCP transaction fails\n" );
+    serial_puts ( msg );
+    serial_puts ( " fails\n" );
+    serial_puts ( "Spinning\n" );
+
+    for ( ;; ) ;
+}
 
 void mcp_i2c_setup(void) {
     write_msg.addr = MCP_ADDR;
@@ -114,7 +134,8 @@ void mcp_write_val(int val) {
     tmp = (val << 4) & 0x00FF;
     write_msg_data[2] = tmp;
 
-    i2c_master_xfer(I2C2, &write_msg, 1, 0);
+    if ( i2c_master_xfer(I2C2, &write_msg, 1, 0) )
+	mcp_fail ( "MCP write" );
 }
 
 static int
@@ -122,7 +143,8 @@ mcp_read_val ( void )
 {
     int tmp = 0;
 
-    i2c_master_xfer(I2C2, &read_msg, 1, 2);
+    if ( i2c_master_xfer(I2C2, &read_msg, 1, 2) )
+	mcp_fail ( "MCP read" );
 
     /* We don't care about the status and EEPROM bytes (0, 3, and 4). */
     tmp = (read_msg_data[1] << 4);
@@ -206,23 +228,39 @@ spinner2 ( void )
 	}
 }
 
-enum bogus { FISH, CAT } xyz;
+/* handler for a simulated interrupt on IRQ 12 */
+/* This must be hand edited in locore.s */
+#define PORK_IRQ	12
 
 void
-startup ( void )
+pork ( void )
 {
+	serial_puts ( "------------- PORK!!\n" );
+}
+
+void
+main ( void )
+{
+	unsigned int time;
+
 	rcc_init ();
+	nvic_initialize ();
+
 	serial_init ();
-	rcc_show ();
-	scb_unaligned ();
+	// rcc_show ();
+	// scb_unaligned ();
 
 	serial_putc ( '\n' );
 	serial_puts ( "Starting\n" );
 
-	show_n ( "Sizeof ENUM: ", sizeof(xyz) );
-	show_reg ( "CCR: ", 0xE000ED14 );
+	// sys_set_pri ( -1, 0xf );
+	systick_prio ();
 
-	rcc_show ();
+	// an enum is indeed a 1 byte item.
+	// show_n ( "Sizeof ENUM: ", sizeof(xyz) );
+	// show_reg ( "CCR: ", 0xE000ED14 );
+
+	// rcc_show ();
 
 	// i2c_init ();
 
@@ -246,12 +284,28 @@ startup ( void )
 	// systick_init_int ( 0xffffff );
 
 	/* Aiming for a 1000 Hz rate */
-	systick_init_int ( 72 * 1000 );
+	// systick_init_int ( 72 * 1000 );
 
 	// spinner ();
 	// spinner2 ();
 	// serial_test ();
+	systick_init_milli ();
+
+	// wait a while and see if we get some ticks
+	delay ();
+	systick_test ();
+
+	nvic_enable ( PORK_IRQ );
+	nvic_sim_irq ( PORK_IRQ );
+
 	dac_demo ();
+
+	/* Seems OK */
+	for ( ;; ) {
+	    time = systick_get ();
+	    show_n ( "systicks: ", time );
+	    big_delay ();
+	}
 }
 
 /* THE END */

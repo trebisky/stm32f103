@@ -3,7 +3,7 @@
  * Tom Trebisky  9-24-2016
  */
 
-# The Cortex M3 is a thumb only processor
+@ The Cortex M3 is a thumb only processor
 .cpu cortex-m3
 .thumb
 
@@ -39,7 +39,8 @@
 .word	bogus_irq		/* IRQ  9 */
 .word	bogus_irq		/* IRQ 10 */
 .word	bogus_irq		/* IRQ 11 */
-.word	bogus_irq		/* IRQ 12 */
+@ chosen at random for a simulated IRQ experiment
+.word	pork			/* IRQ 12 */
 .word	bogus_irq		/* IRQ 13 */
 .word	bogus_irq		/* IRQ 14 */
 .word	bogus_irq		/* IRQ 15 */

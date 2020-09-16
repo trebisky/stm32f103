@@ -161,6 +161,26 @@ void i2c_init(i2c_dev *dev) {
 #define _i2c_handle_remap(dev, flags) ((void)0)
 #endif
 
+static i2c_dev *ii_dev;
+
+void
+i2c_show ( char *msg )
+{
+    /* XXX TJT */
+    serial_puts ( msg );
+    serial_putc ( '\n' );
+    show_reg ( "i2c CR1 ", &ii_dev->regs->CR1 );
+    show_reg ( "i2c CR2 ", &ii_dev->regs->CR2 );
+    show_reg ( "i2c SR1 ", &ii_dev->regs->SR1 );
+    show_reg ( "i2c SR2 ", &ii_dev->regs->SR2 );
+}
+
+void
+i2c_show_init ( i2c_dev *dev )
+{
+    ii_dev = dev;
+}
+
 /**
  * @brief Initialize an I2C device as bus master
  * @param dev Device to enable
@@ -176,20 +196,16 @@ void i2c_init(i2c_dev *dev) {
  */
 void i2c_master_enable(i2c_dev *dev, uint32 flags) {
 
-    show32 ( "i2c_ME dev ", dev );
-    show32 ( "i2c_ME state ", dev->state );
-    show32 ( "i2c_ME state ", dev->state );
-    show32 ( "i2c_ME state ", dev->state );
-    show32 ( "i2c_ME state ", dev->state );
-    show32 ( "i2c_ME state ", dev->state );
-    show_reg ( "i2c_ME state ", &dev->state );
+    // show32 ( "i2c_ME dev ", dev );
+    // show32 ( "i2c_ME state ", dev->state );
+    // show_reg ( "i2c_ME state ", &dev->state );
 
     /* PE must be disabled to configure the device */
     ASSERT(!(dev->regs->CR1 & I2C_CR1_PE));
 
-    /* XXX stick this here to see if we get a fault */
-    /* XXX and we do !!! */
-    dev->state = I2C_STATE_IDLE;
+    /* XXX TJT */
+    i2c_show_init ( dev );
+    i2c_show ( "ME start" );
 
     /* Ugh */
     _i2c_handle_remap(dev, flags);
@@ -222,7 +238,9 @@ void i2c_master_enable(i2c_dev *dev, uint32 flags) {
     i2c_peripheral_enable(dev);
 
     dev->state = I2C_STATE_IDLE;
+
     serial_puts ( "beep 4\n" );
+    i2c_show ( "ME end" );
 }
 
 /**
@@ -256,14 +274,17 @@ int32 i2c_master_xfer(i2c_dev *dev,
 
     i2c_enable_irq(dev, I2C_IRQ_EVENT);
     i2c_start_condition(dev);
+    i2c_show ( "MX start" );
 
     rc = wait_for_state_change(dev, I2C_STATE_XFER_DONE, timeout);
+    show_n ( "master_xfer returns: ", rc );
     if (rc < 0) {
         goto out;
     }
 
     dev->state = I2C_STATE_IDLE;
 out:
+    i2c_show ( "MX done" );
     return rc;
 }
 

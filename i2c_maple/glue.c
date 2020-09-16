@@ -12,6 +12,36 @@
 #include <libmaple/libmaple.h>
 #include <libmaple/bitband.h>
 
+
+/*
+void i2c1_ev_handler () { serial_puts ( "1_ev\n" ); }
+void i2c1_er_handler () { serial_puts ( "1_er\n" ); }
+void i2c2_ev_handler () { serial_puts ( "2_ev\n" ); }
+void i2c2_er_handler () { serial_puts ( "2_er\n" ); }
+*/
+
+/* glue indeed, these call routines in maple_stm32f103_i2c.c */
+void i2c1_ev_handler () { 
+    serial_puts ( "INT i2c1_ev/n" );
+    __irq_i2c1_ev ();
+}
+
+void i2c1_er_handler () { 
+    serial_puts ( "INT i2c1_er/n" );
+    __irq_i2c1_er ();
+}
+
+void i2c2_ev_handler () { 
+    serial_puts ( "INT i2c2_ev/n" );
+    __irq_i2c2_ev ();
+}
+
+void i2c2_er_handler () { 
+    serial_puts ( "INT i2c2_er/n" );
+    __irq_i2c2_er ();
+}
+
+
 /* --- from stm32f1/gpio.c --- */
 
 gpio_dev gpiob = {
@@ -55,13 +85,9 @@ afio_remap ( afio_remap_peripheral remapping )
 
 /* --- from systick.c --- */
 
-volatile uint32 systick_uptime_millis;
+// moved to nvic.c
+// volatile uint32 systick_uptime_millis;
 
-void
-systick_handler ( void )
-{
-	systick_uptime_millis++;
-}
 /* --- from nvic.c --- */
 
 void
@@ -183,11 +209,19 @@ void rcc_reset_dev(rcc_clk_id id) {
 
 /* Called when an ASSERT fails */
 void
-_fail ( const char*m1, int x, const char*m2 )
+_fail ( const char *file, int line, const char *exp )
 {
-    serial_puts ( "FAIL\n");
+    serial_puts ( "ASSERT failed: " );
+    serial_puts ( exp );
+    serial_putc ( '\n' );
+
+    serial_puts ( "file: " );
+    serial_puts ( file );
+    serial_puts ( " (line " );
+    printn ( line );
+    serial_puts ( ")\n" );
+
     for ( ;; ) ;
 }
-
 
 /* THE END */

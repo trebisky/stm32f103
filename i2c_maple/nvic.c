@@ -14,6 +14,8 @@
  *  0xE000EFD0 - ID space
  */
 
+void sys_set_pri ( int, int );
+
 void
 bogus_nmi ( void )
 {
@@ -52,15 +54,78 @@ bogus_irq ( void )
 	for ( ;; ) ;
 }
 
+#ifdef notdef
 struct nvic {
 	volatile unsigned long iser[3];	/* 00 */
 	volatile unsigned long icer[3];	/* 0c */
 	/* ... */
 };
+#endif
+
+/* NVIC registers */
+struct nvic {
+	volatile unsigned int iser[8];	/* 00 */
+	int _pad1[24];
+	volatile unsigned int icer[8];	/* - */
+	int _pad2[24];
+	volatile unsigned int ispr[8];	/* - */
+	int _pad3[24];
+	volatile unsigned int icpr[8];	/* - */
+	int _pad4[24];
+	volatile unsigned int iabr[8];	/* - */
+	int _pad5[56];
+	volatile unsigned char prio[240];	/* - */
+	int _pad6[644];
+	volatile unsigned int stir;	/* software trigger */
+};
 
 #define NVIC_BASE	((struct nvic *) 0xe000e100)
 
 #define NUM_IRQ	68
+
+/* maple has an nvic_init inline thing in nvic.h
+ *  so I we will call this "initialize"
+ */
+void
+nvic_initialize ( void )
+{
+	struct nvic *np = NVIC_BASE;
+	int i;
+
+	// nvic_set_vector_table(address, offset);
+
+	/* disable all interrupts */
+	np->icer[0] = 0xffffffff;
+	np->icer[1] = 0xffffffff;
+	np->icer[2] = 0xffffffff;
+
+	/* Put everything at the lowest priority level */
+	for ( i=0; i<NUM_IRQ; i++ )
+	    np->prio[i] = 0xf0;
+
+	// nvic_irq_set_priority(NVIC_SYSTICK, 0xF);
+	// sys_set_pri ( -1, 0xf );
+}
+
+/* This should yield a simulated interrupt on whatever IRQ
+ *  is requested.  Tested - it works fine, but don't forget
+ *  to first call nvic_enable() on the desired IRQ.
+ */
+void
+nvic_sim_irq ( int irq )
+{
+	struct nvic *np = NVIC_BASE;
+
+	np->stir = irq;
+}
+
+void
+nvic_set_pri ( int irq, int prio )
+{
+	struct nvic *np = NVIC_BASE;
+
+	np->prio[irq] = (prio & 0xf) << 4;
+}
 
 void
 nvic_enable ( int irq )
@@ -84,7 +149,7 @@ struct scb {
 	volatile unsigned int aircr;	/* 0c */
 	volatile unsigned int scr;	/* 10 */
 	volatile unsigned int ccr;	/* 14 */
-	volatile unsigned int shp[12];	/* 18 */
+	volatile unsigned char shp[12];	/* 18 */
 	volatile unsigned int cshcsr;
 	volatile unsigned int cfsr;
 	volatile unsigned int hfsr;
@@ -95,7 +160,69 @@ struct scb {
 
 #define SCB_BASE ((struct scb *) 0xE000ED00)
 
-/* Allow unaligned accesses */
+/* The SHP registers hold the priority for system exceptions
+ * at least for exception 4 through 15.
+ * So, the following values index the SHP registers,
+ * missing values are reserved.
+ * Certain software (including maple) uses negative IRQ numbers
+ * for these things, so SYSTICK is -1, NMI is -14.
+ * I ignore that, but notice that the following will convert
+ * one of these negative IRQ numbers into an exception index.
+ *
+ *	int index = ((unsigned int)sys_irq & 0xf);
+ *      subtract 4 from this to get an index into shp[]
+ *
+ * The ARM documents also show these as 3 32 bit registers,
+ * but it seems that byte access is allowed.
+ */
+
+#define EXC_RESET	1
+#define EXC_NMI		2
+#define EXC_HF		3
+#define EXC_MM		4
+#define EXC_BUS		5
+#define EXC_USAGE	6
+#define EXC_SYSCALL	11
+#define EXC_PENDSV	14
+#define EXC_SYSTICK	15
+#define EXC_IRQ		16
+
+/* Small numbers seem to be the highest priority.
+ * Notice that the ARM documents seem to indicate than any value
+ * from 0-255 may be set, unlike the IRQ priority values.
+ */
+
+
+void
+sys_set_pri ( int exc, int prio )
+{
+	struct scb *sp = SCB_BASE;
+
+	sp->shp[exc-4] = (prio & 0xf) << 4;
+}
+
+void
+systick_prio ( void )
+{
+	struct scb *sp = SCB_BASE;
+	volatile unsigned int *p;
+
+	sys_set_pri ( EXC_SYSTICK, 0xf );
+
+	p = &sp->ccr;
+	p++;
+	show_reg ( "SHP0 ", p );
+	p++;
+	show_reg ( "SHP1 ", p );
+	p++;
+	show_reg ( "SHP2 ", p );
+}
+
+/* As near as I can tell this is NOT what you want.
+ * normally (with this not set) unaligned accesses
+ * are allowed.  If you set this bit, they will cause
+ * a fault.
+ */
 void
 scb_unaligned ( void )
 {
@@ -147,12 +274,8 @@ struct systick {
 #define	TICK_INTPEND	0x02
 #define	TICK_ENABLE	0x01
 
-/* This can be whatever you please */
-#define SYSTICK_RELOAD	100
-
+#ifdef notdef
 int ss = 0;
-
-#define A_BIT	7
 
 /* The actual handler is now in glue.c
  */
@@ -169,6 +292,22 @@ systick_handler_ORIG ( void )
 	    ss = 1;
 	}
 }
+#endif
+
+/* This name is used by macros in libmaple */
+volatile unsigned int systick_uptime_millis;
+
+void
+systick_handler ( void )
+{
+        systick_uptime_millis++;
+}
+
+unsigned int
+systick_get ( void )
+{
+        return systick_uptime_millis;
+}
 
 void
 systick_init ( int val )
@@ -176,10 +315,20 @@ systick_init ( int val )
 	struct systick *sp = SYSTICK_BASE;
 
 	sp->csr = TICK_SYSCLK;
-	// sp->reload = SYSTICK_RELOAD - 1;
 	sp->reload = val - 1;
 	sp->value = 0;
 	sp->csr = TICK_SYSCLK | TICK_ENABLE;
+}
+
+void
+systick_test ( void )
+{
+	if ( ! systick_uptime_millis ) {
+	    serial_puts ( "Systick is not running\n" );
+	    serial_puts ( "Spinning\n" );
+	    for ( ;; ) ;
+	}
+	show_n ( "Systick count: ", systick_uptime_millis );
 }
 
 void
@@ -194,6 +343,12 @@ systick_init_int ( int val )
 	sp->csr = TICK_SYSCLK | TICK_ENABLE | TICK_INTPEND;
 
 	// gpio_a_init ( A_BIT );
+}
+
+void
+systick_init_milli ( void )
+{
+	systick_init_int ( 72 * 1000 );
 }
 
 void

@@ -15,11 +15,42 @@
 MEMORY
 {
    flash(RX)  : ORIGIN = 0x08000000, LENGTH = 128K
-   sram(WAIL) : ORIGIN = 0x20000000, LENGTH = 20K
+   sram(RW)   : ORIGIN = 0x20000000, LENGTH = 20K
 }
 
 SECTIONS
 {
-   .text : { *(.text*) } > flash
-   .bss  : { *(.bss*) } > sram
+   .text :
+   {
+       *(.text*)
+       . = ALIGN(4);
+       __text_end = .;
+   } > flash
+
+   .bss  :
+   {
+       . = ALIGN(4);
+       __bss_start = .;
+       *(.bss*)
+       *(COMMON)
+       . = ALIGN(4);
+       __bss_end = .;
+   } > sram
+
+   .data :
+   {
+       . = ALIGN(4);
+       __data_start = .;
+       *(.data*)
+       . = ALIGN(4);
+       __data_end = .;
+   } > sram AT> flash
+
+   .rodata :
+   {
+       . = ALIGN(4);
+       *(.rodata*)
+       . = ALIGN(4);
+   } > flash
+
 }
