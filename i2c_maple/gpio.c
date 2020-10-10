@@ -175,4 +175,16 @@ gpio_i2c2 ( void )
 	gpio_mode ( GPIOB_BASE, 11, OUTPUT_50M | ALT_PUSH_PULL );
 }
 
+void
+xyz_debug ( char *msg )
+{
+       struct gpio *gp = (struct gpio *) GPIOB_BASE;
+
+	serial_puts ( "xyx: -- " );
+	serial_puts ( msg );
+	serial_puts ( "  --\n" );
+        show_reg ( "GPIO B CR-0 ", (int *) &gp->cr[0] );
+        show_reg ( "GPIO B CR-1 ", (int *) &gp->cr[1] );
+}
+
 /* THE END */

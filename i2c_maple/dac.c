@@ -186,13 +186,16 @@ dac_demo ( void )
 {
     serial_puts ( "Starting dac demo\n" );
 
+    xyz_debug ( "PRE" );
     i2c_master_enable(I2C2, 0);
+    xyz_debug ( "POST" );
     delay();
     serial_puts ( " demo 1\n" );
 
     mcp_i2c_setup();
     serial_puts ( " demo 2\n" );
 
+    xyz_debug ( "TEST" );
     if ( mcp_test() )
 	return;
 
@@ -250,8 +253,8 @@ main ( void )
 	// rcc_show ();
 	// scb_unaligned ();
 
-	serial_putc ( '\n' );
-	serial_puts ( "Starting\n" );
+	serial_puts ( "\n ----------------------" );
+	serial_puts ( "Starting Tom's i2c_maple-ectomy\n" );
 
 	// sys_set_pri ( -1, 0xf );
 	systick_prio ();
@@ -297,6 +300,8 @@ main ( void )
 
 	nvic_enable ( PORK_IRQ );
 	nvic_sim_irq ( PORK_IRQ );
+
+	// spinner ();
 
 	dac_demo ();
 

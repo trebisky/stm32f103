@@ -230,6 +230,10 @@ void i2c_master_enable(i2c_dev *dev, uint32 flags) {
     nvic_irq_enable(dev->ev_nvic_line);
     nvic_irq_enable(dev->er_nvic_line);
 
+    // works
+    // nvic_sim_irq ( 33 );
+    // nvic_sim_irq ( 34 );
+
     i2c_enable_irq(dev, I2C_IRQ_EVENT | I2C_IRQ_BUFFER | I2C_IRQ_ERROR);
 
     serial_puts ( "beep 3\n" );

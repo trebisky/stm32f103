@@ -21,23 +21,23 @@ void i2c2_er_handler () { serial_puts ( "2_er\n" ); }
 */
 
 /* glue indeed, these call routines in maple_stm32f103_i2c.c */
-void i2c1_ev_handler () { 
-    serial_puts ( "INT i2c1_ev/n" );
+void i2c1_ev_handler ( void ) { 
+    serial_puts ( "INT i2c1_ev\n" );
     __irq_i2c1_ev ();
 }
 
-void i2c1_er_handler () { 
-    serial_puts ( "INT i2c1_er/n" );
+void i2c1_er_handler ( void ) { 
+    serial_puts ( "INT i2c1_er\n" );
     __irq_i2c1_er ();
 }
 
-void i2c2_ev_handler () { 
-    serial_puts ( "INT i2c2_ev/n" );
+void i2c2_ev_handler ( void ) { 
+    serial_puts ( "INT i2c2_ev\n" );
     __irq_i2c2_ev ();
 }
 
-void i2c2_er_handler () { 
-    serial_puts ( "INT i2c2_er/n" );
+void i2c2_er_handler ( void ) { 
+    serial_puts ( "INT i2c2_er\n" );
     __irq_i2c2_er ();
 }
 
@@ -61,9 +61,12 @@ gpio_set_mode ( gpio_dev *dev, uint8 pin, gpio_pin_mode mode)
     uint32 shift = (pin & 0x7) * 4;
     uint32 tmp = *cr;
 
+    show_n ( "GPIO set mode, pin ", pin );
+    show_reg ( "GPIO_SET_MODE ", cr );
     tmp &= ~(0xF << shift);
     tmp |= (mode == GPIO_INPUT_PU ? GPIO_INPUT_PD : mode) << shift;
     *cr = tmp;
+    show_reg ( "GPIO_SET_MODE ", cr );
 
     if (mode == GPIO_INPUT_PD) {
         regs->ODR &= ~(1U << pin);

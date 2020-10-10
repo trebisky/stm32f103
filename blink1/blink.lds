@@ -18,6 +18,9 @@ MEMORY
 
 SECTIONS
 {
-   .text : { *(.text*) } > flash
+   .text : {
+       *(.vectors*)
+       *(.text*)
+   } > flash
    .bss  : { *(.bss*) } > sram
 }

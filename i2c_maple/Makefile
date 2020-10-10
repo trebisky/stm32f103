@@ -32,8 +32,8 @@ OBJDUMP = $(TOOLS)-objdump
 GDB = $(TOOLS)-gdb
 
 #OBJS = locore.o dac.o nvic.o rcc.o gpio.o serial.o timer.o i2c.o
-OBJS = locore.o startup.o dac.o nvic.o rcc.o gpio.o serial.o timer.o maple_i2c.o maple_stm32f103_i2c.o glue.o
 #OBJS = locore.o dac.o nvic.o rcc.o gpio.o serial.o timer.o
+OBJS = locore.o startup.o dac.o nvic.o rcc.o gpio.o serial.o timer.o maple_i2c.o maple_stm32f103_i2c.o glue.o
 
 all: dac.elf dac.dump
 

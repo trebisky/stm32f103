@@ -7,6 +7,8 @@
 .cpu cortex-m3
 .thumb
 
+.section .vectors
+
 .word   0x20005000  /* stack top address */
 .word   _reset      /* 1 Reset */
 .word   spin        /* 2 NMI */
