@@ -3,6 +3,10 @@ microcontroller.  I program using the C language and Makefiles, so this
 is a collection of "on the bare metal" style stuff.  By and large it is
 the record of my education on these devices.
 
+My most recent work has moved to this project:
+
+https://github.com/trebisky/libmaple-unwired
+
 It all began when I ordered a couple of
 "STM32F103C8T6 ARM STM32 Minimum System Development Board"
 from AliExpress for $2.00.  The are now selling for less than that,
