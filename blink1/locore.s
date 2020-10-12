@@ -4,10 +4,10 @@
  */
 
 # The Cortex M3 is a thumb only processor
-.cpu cortex-m3
-.thumb
 
 .section .vectors
+.cpu cortex-m3
+.thumb
 
 .word   0x20005000  /* stack top address */
 .word   _reset      /* 1 Reset */
@@ -30,7 +30,9 @@
 .word   spin        /* 18 IRQ2 */
 .word   spin        /* 19 ...   */
 		    /* On to IRQ67 */
+.section .text
 
+.thumb_func
 spin:   b spin
 
 .thumb_func
