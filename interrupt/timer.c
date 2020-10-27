@@ -42,11 +42,15 @@ struct timer {
 #define TIMER4_BASE	(struct timer *) 0x40000800
 
 #define	CR1_ENABLE	1	/* enable the counter */
+#define	CR1_URS		0x04
+#define	CR1_ARPE	0x80
+
 #define ONE_PULSE	0x08	/* no autoreload */
 #define DIR_DOWN	0x10	/* count down (only valid in certain modes) */
 
 #define	UPDATE_IE	1	/* enable update interrupts */
 
+#define	EGR_UG		1
 #define	EGR_CC1		2
 #define	EGR_CC2		4
 #define	EGR_CC3		8
@@ -291,14 +295,41 @@ test_t4 ( void )
 	tp->cr1 = CR1_ENABLE;
 }
 
+/* Try Mark Pe's setup
+ * Should blink at 10 Hz (and it does!)
+ */
+static void
+test_pe ( void )
+{
+	struct timer *tp = TIMER3_BASE;
+
+	cur_test = TEST3;
+
+	// tp->cr1 = CR1_ARPE | CR1_URS;
+	// tp->egr = EGR_UG;
+
+	tp->arr = 50000;
+	// tp->psc = 36;	/* 10 Hz blink */
+	tp->psc = 360;		/* 1 Hz blink */
+
+	nvic_enable ( TIMER3_IRQ );
+
+	tp->dier = UPDATE_IE;
+	// tp->cnt = 0;
+
+	tp->cr1 = CR1_ENABLE;
+}
+
 void
 timer_init ( void )
 {
 	// test1 ();
 	// test2 ();
 	// test_t2 ();
-	test_t3 ();
+	// test_t3 ();
 	// test_t4 ();
+	test_pe ();
+
 	serial_puts ( " Test should be running\n" );
 	serial_puts ( " --- spinning\n" );
 	for ( ;; )
