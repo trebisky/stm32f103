@@ -55,8 +55,8 @@
 .word	bogus		/* IRQ 26 -- Timer 1 trig */
 .word	bogus		/* IRQ 27 -- Timer 1 cc */
 .word	tim2_handler	/* IRQ 28 -- Timer 2 */
-.word	bogus		/* IRQ 29 -- Timer 3 */
-.word	bogus		/* IRQ 30 -- Timer 4 */
+.word	tim3_handler	/* IRQ 29 -- Timer 3 */
+.word	tim4_handler	/* IRQ 30 -- Timer 4 */
 .word	bogus		/* IRQ 31 */
 .word	bogus		/* IRQ 32 */
 .word	bogus		/* IRQ 33 */

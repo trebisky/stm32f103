@@ -36,6 +36,7 @@ struct timer {
 };
 
 #define TIMER1_BASE	(struct timer *) 0x40012C00
+
 #define TIMER2_BASE	(struct timer *) 0x40000000
 #define TIMER3_BASE	(struct timer *) 0x40000400
 #define TIMER4_BASE	(struct timer *) 0x40000800
@@ -61,6 +62,8 @@ struct timer {
 /* --------- */
 
 #define	TIMER2_IRQ	28
+#define	TIMER3_IRQ	29
+#define	TIMER4_IRQ	30
 
 /* On page 92 of the reference manual is the all important clock diagram.
  * It shows that Timer 1 gets the raw PCLK2 (72 Mhz) unscaled.
@@ -85,21 +88,18 @@ static int tcount;
 
 static int led_state = 0;
 
-/* Interrupt handler */
-void
-tim2_handler ( void )
+static void
+timer_engine ( void )
 {
-	struct timer *tp = TIMER2_BASE;
-
-	tp->sr = 0;	/* cancel the interrupt */
-
 	if ( cur_test == TEST3 ) {
 	    if ( led_state ) {
 		led_state = 0;
 		led_on ();
+		// serial_putc ( 'A' );
 	    } else {
 		led_state = 1;
 		led_off ();
+		// serial_putc ( 'B' );
 	    }
 	} else {
 	    /* TEST1 */
@@ -116,6 +116,41 @@ tim2_handler ( void )
 	    }
 	}
 }
+
+/* Interrupt handler */
+void
+tim2_handler ( void )
+{
+	struct timer *tp = TIMER2_BASE;
+
+	tp->sr = 0;	/* cancel the interrupt */
+
+	timer_engine ();
+}
+
+/* Interrupt handler */
+void
+tim3_handler ( void )
+{
+	struct timer *tp = TIMER3_BASE;
+
+	tp->sr = 0;	/* cancel the interrupt */
+
+	timer_engine ();
+}
+
+/* Interrupt handler */
+void
+tim4_handler ( void )
+{
+	struct timer *tp = TIMER4_BASE;
+
+	tp->sr = 0;	/* cancel the interrupt */
+
+	timer_engine ();
+}
+
+/* -------------------------------------------------------------- */
 
 int
 timer_get ( void )
@@ -207,7 +242,7 @@ test2 ( void )
  *  9-4-2020  This confirms that some peripheral on APB1 is working.
  */
 static void
-test3 ( void )
+test_t2 ( void )
 {
 	struct timer *tp = TIMER2_BASE;
 
@@ -222,12 +257,52 @@ test3 ( void )
 	tp->cr1 = CR1_ENABLE;
 }
 
+/* This is the above, but running on timer 3 */
+static void
+test_t3 ( void )
+{
+	struct timer *tp = TIMER3_BASE;
+
+	cur_test = TEST3;
+
+	tp->arr = 2000;		/* 0x7d0 */
+	tp->psc = 5000;
+
+	nvic_enable ( TIMER3_IRQ );
+	tp->dier = UPDATE_IE;
+
+	tp->cr1 = CR1_ENABLE;
+}
+
+/* This is the above, but running on timer 4 */
+static void
+test_t4 ( void )
+{
+	struct timer *tp = TIMER4_BASE;
+
+	cur_test = TEST3;
+
+	tp->arr = 2000;		/* 0x7d0 */
+	tp->psc = 5000;
+
+	nvic_enable ( TIMER4_IRQ );
+	tp->dier = UPDATE_IE;
+
+	tp->cr1 = CR1_ENABLE;
+}
+
 void
 timer_init ( void )
 {
 	// test1 ();
 	// test2 ();
-	test3 ();
+	// test_t2 ();
+	test_t3 ();
+	// test_t4 ();
+	serial_puts ( " Test should be running\n" );
+	serial_puts ( " --- spinning\n" );
+	for ( ;; )
+	    ;
 }
 
 /* THE END */

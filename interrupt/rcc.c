@@ -160,6 +160,8 @@ rcc_init ( void )
 	rp->ape2 |= UART1_ENABLE;
 
 	rp->ape1 |= TIMER2_ENABLE;
+	rp->ape1 |= TIMER3_ENABLE;
+	rp->ape1 |= TIMER4_ENABLE;
 
 	// rp->ape1 |= UART2_ENABLE;
 	// rp->ape1 |= UART3_ENABLE;
