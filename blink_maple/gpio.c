@@ -25,13 +25,16 @@ struct gpio *gp;
 unsigned long on_mask;
 unsigned long off_mask;
 
+/* XXX - GPIO is "wired" in */
+
 void
 led_init ( int bit )
 {
 	int conf;
 	int shift;
 
-	gp = GPIOC_BASE;
+	// gp = GPIOC_BASE;
+	gp = GPIOA_BASE;
 
 	shift = (bit - 8) * 4;
 	conf = gp->cr[1] & ~(0xf<<shift);

@@ -31,7 +31,9 @@ big_delay ( void )
 	    ;
 }
 
+/* To change GPIO, you must hack it in gpio.c */
 #define PC13	13
+#define PA5	5
 
 #define NBLINKS		3
 
@@ -42,16 +44,20 @@ startup ( void )
 
 	rcc_init ();
 
-	led_init ( PC13 );
+	// led_init ( PC13 );
+	led_init ( PA5 );
 
 	for ( ;; ) {
 	    for ( i=0; i<NBLINKS; i++ ) {
-		led_on ();
-		delay ();
+		// led_on ();
 		led_off ();
+		delay ();
+		// led_off ();
+		led_on ();
 		delay ();
 	    }
 
+	    big_delay ();
 	    big_delay ();
 	}
 }
