@@ -3,8 +3,9 @@ microcontroller.  I program using the C language and Makefiles, so this
 is a collection of "on the bare metal" style stuff.  By and large it is
 the record of my education on these devices.
 
-My most recent work has moved to this project:
+My most recent work has moved to these project:
 
+https://github.com/trebisky/stm32f411
 https://github.com/trebisky/libmaple-unwired
 
 It all began when I ordered a couple of
@@ -12,6 +13,9 @@ It all began when I ordered a couple of
 from AliExpress for $2.00.  The are now selling for less than that,
 and with free shipping.  These are also known as the "blue pill"
 and are discussed in the STM32duino forums.
+
+See also the link above to the STM32F411 based "black pill" that
+I am now starting to work with in a similar fashion.
 
 For lots of notes and information, see my website:
 
