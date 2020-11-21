@@ -550,7 +550,7 @@ really makes no sense at all.
 
 ; offset 0x18 - 24 is the APB2ENR register
 ; we write 0x4004
-; this enables the clocks for USART1 and IOPA
+; this enables the clocks for USART1 and GPIO-A
 
 1ffff38a:	f244 0104 	movw	r1, #16388	; 0x4004
 1ffff38e:	6181      	str	r1, [r0, #24]
