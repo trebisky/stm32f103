@@ -3,9 +3,10 @@ microcontroller.  I program using the C language and Makefiles, so this
 is a collection of "on the bare metal" style stuff.  By and large it is
 the record of my education on these devices.
 
-My most recent work has moved to these project:
+My most recent work has moved to these projects:
 
 https://github.com/trebisky/stm32f411
+
 https://github.com/trebisky/libmaple-unwired
 
 It all began when I ordered a couple of
