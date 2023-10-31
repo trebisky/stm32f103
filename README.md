@@ -33,10 +33,41 @@ Note that many of the early examples have a naive linker script
 Later examples require this.  The presence of startup.c should be
 an indicator of more sophisticated and proper treatement.
 
+***
+
+Some of these projects target a Maple board (or Olimexduino).
+These projects are linked to and loaded at a different address
+(0x08005000 rather than 0x08000000).  This is because these
+boards have a USB laoder in the start of flash and I don't
+want to overwrite it.  In fact I just go ahead and use it
+instead of using SWD as I do for the blue pill.
+
+***
+
 Many of these projects require/expect a serial port.
 
 This requires a USB to serial gadget connected to PB9 and PB10
 Connect PA9 to RX
 Connect PA10 to TX
 also connect ground.
+
+***
+
+Here is a list of projects from 2017 ---
+
+1. blink1 - very basic LED blinking
+2. blink1b - minor code cleanup on the above
+3. blink_ext - blink external LED on A0
+4. blink2 - more code reorganization and file grouping
+5. blink_maple - blink LED on PA5 rather than PC13
+
+9. serial1 - first working serial (uart) driver
+9. usb1 - get barely started working with USB
+
+***
+
+The above work was done in 2017, I am beginning new work in 2023,
+focusing on learning about low level USB
+
+1. usb_tiny - echo server using the TinyUSB library
 
