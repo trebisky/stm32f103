@@ -1,0 +1,5 @@
+#!/bin/ruby
+
+(0..67).each { |v|
+    print ".word\tbogus\t\t/* IRQ %2d */\n" % v
+}

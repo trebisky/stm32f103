@@ -152,10 +152,9 @@ sprintf(char *buf, const char *fmt, ...)
 static int
 vsprintf(char *buf, const char *fmt, va_list args)
 {
-	/*
-        return vsnprintf(buf, 0xFFFFFFFFUL, fmt, args);
-	*/
-        return vsnprintf(buf, 0x0FFFFFFFUL, fmt, args);
+        // return vsnprintf(buf, 0xFFFFFFFFUL, fmt, args);
+        // return vsnprintf(buf, 0x0FFFFFFFUL, fmt, args);
+        return vsnprintf(buf, (unsigned int) 0xFFFFFFFF, fmt, args);
 }
 
 /* XXX size should/could really be size_t

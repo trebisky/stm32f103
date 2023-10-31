@@ -8,7 +8,7 @@ TOOLS = arm-none-eabi
 AS = $(TOOLS)-as
 
 #COPTS = -mcpu=cortex-m3 -mthumb -Wno-implicit-function-declaration
-COPTS = -mcpu=cortex-m3 -mthumb -Wno-implicit-function-declaration -fno-builtin
+COPTS = -mcpu=cortex-m3 -mthumb -Wno-implicit-function-declaration -fno-builtin-printf -fno-builtin
 # Use the -g flag if you intend to use gdb
 #CC = $(TOOLS)-gcc $(COPTS) -g 
 #CC = $(TOOLS)-gcc $(COPTS)
@@ -20,18 +20,18 @@ OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
-OBJS = locore.o usb1_main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
+OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
 
-all: usb1.elf usb1.dump
+all: tiny.elf tiny.dump
 
-usb1.dump:	usb1.elf
-	$(DUMP) usb1.elf >usb1.dump
+tiny.dump:	tiny.elf
+	$(DUMP) tiny.elf >tiny.dump
 
-usb1.bin:	usb1.elf
-	$(OBJCOPY) usb1.elf usb1.bin -O binary
+tiny.bin:	tiny.elf
+	$(OBJCOPY) tiny.elf tiny.bin -O binary
 
-usb1.elf: 	$(OBJS)
-	$(LD) -T usb1.lds -o usb1.elf $(OBJS)
+tiny.elf: 	$(OBJS)
+	$(LD) -T simple.lds -o tiny.elf $(OBJS)
 
 locore.o:	locore.s
 	$(AS) locore.s -o locore.o
@@ -42,18 +42,18 @@ locore.o:	locore.s
 OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
 
 # This works great once I fixed the base address in the LDS file
-flash:	usb1.elf
-	openocd $(OCDCFG) -c "program usb1.elf verify reset exit"
+flash:	tiny.elf
+	openocd $(OCDCFG) -c "program tiny.elf verify reset exit"
 
 # No need for this now that the above works
-bflash:	usb1.bin
-	openocd $(OCDCFG) -c "program usb1.bin verify reset exit 0x08000000"
+bflash:	tiny.bin
+	openocd $(OCDCFG) -c "program tiny.bin verify reset exit 0x08000000"
 
 gdb:
-	$(GDB) --eval-command="target remote localhost:3333" usb1.elf
+	$(GDB) --eval-command="target remote localhost:3333" tiny.elf
 
 gdbtui:
-	$(GDB) -tui --eval-command="target remote localhost:3333" usb1.elf
+	$(GDB) -tui --eval-command="target remote localhost:3333" tiny.elf
 
 clean:
-	rm -f *.o usb1.elf usb1.bin usb1.dump
+	rm -f *.o tiny.elf tiny.bin tiny.dump

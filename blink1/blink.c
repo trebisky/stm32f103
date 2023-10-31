@@ -78,8 +78,8 @@ led_init ( int bit )
 	conf |= (MODE_OUT_2|CONF_GP_OD) << shift;
 	gp->cr[1] = conf;
 
-	on_mask = 1 << bit;
-	off_mask = 1 << (bit+16);
+	off_mask = 1 << bit;
+	on_mask = 1 << (bit+16);
 }
 
 void
@@ -96,6 +96,8 @@ led_off ( void )
 
 #define PC13	13
 
+#define TWICE
+
 void
 startup ( void )
 {
@@ -106,6 +108,14 @@ startup ( void )
 	    delay ();
 	    led_off ();
 	    delay ();
+#ifdef TWICE
+	    led_on ();
+	    delay ();
+	    led_off ();
+	    delay ();
+	    delay ();
+	    delay ();
+#endif
 	}
 }
 

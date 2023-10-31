@@ -47,6 +47,9 @@ OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/ope
 flash:  blink.elf
 	openocd $(OCDCFG) -c "program blink.elf verify reset exit"
 
+new_flash:
+	st-flash write blink.bin 0x8000000
+
 # This is how I first learned to burn the image.
 #  (I use the above "make flash" these days.
 #

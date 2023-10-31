@@ -32,3 +32,11 @@ Note that many of the early examples have a naive linker script
 (lds file) which does not initialize BSS or global variables at all.
 Later examples require this.  The presence of startup.c should be
 an indicator of more sophisticated and proper treatement.
+
+Many of these projects require/expect a serial port.
+
+This requires a USB to serial gadget connected to PB9 and PB10
+Connect PA9 to RX
+Connect PA10 to TX
+also connect ground.
+
