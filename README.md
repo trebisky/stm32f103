@@ -59,10 +59,18 @@ Here is a list of projects from 2017 ---
 2. blink1b - minor code cleanup on the above
 3. blink_ext - blink external LED on A0
 4. blink2 - more code reorganization and file grouping
-5. blink_maple - blink LED on PA5 rather than PC13
+5. blink_maple - blink LED on PA5 rather than PC13  --M
+
+6. memory - figure out how to handle bss and initialized data --B
+7. i2c_maple - use libmaple for i2c DAC --B
+8. adc_serial - work with F103 adc --P
 
 9. serial1 - first working serial (uart) driver
 9. usb1 - get barely started working with USB
+
+Note that blink_maple is the only demo built to run on the Maple board.
+
+The letters are: M = links for Maple, B = zeros BSS, P = includes printf
 
 ***
 

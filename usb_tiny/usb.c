@@ -135,7 +135,7 @@ struct usb_desc {
 
 void	clear_usb_ram ( void );
 void	dump_usb_ram ( void );
-static void	pma_show ( void );
+void	pma_show ( void );
 
 /* Simulate a USB disconnect to get the hosts attention.
  * On our board, PA11 is USB D- and PA12 is USB D+
@@ -297,7 +297,7 @@ usb_reset ( char *msg )
 // #define NUM_ENDP     8
 #define NUM_ENDP        1
 
-static void
+void
 pma_show ( void )
 {
         int i, j;

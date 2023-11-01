@@ -83,10 +83,14 @@ led_demo ( void )
 	    for ( i=0; i<NBLINKS; i++ ) {
 		led_on ();
 		delay ();
+		delay ();
 		led_off ();
+		delay ();
 		delay ();
 	    }
 
+	    big_delay ();
+	    big_delay ();
 	    big_delay ();
 	}
 }
@@ -139,7 +143,6 @@ startup ( void )
 	// dump_usb_ram ();
 
 	printf ( "STM32 usb_tiny demo\n" );
-	serial_puts ( "Main is spinning\n" );
 
 #ifdef notdef
 	// printf ( "systick count %d\n", systick_count );
@@ -154,9 +157,18 @@ startup ( void )
 	}
 #endif
 
+	big_delay ();
+	big_delay ();
+	pma_show ();
 
+	serial_puts ( "Main is blinking\n" );
+	led_demo ();
+
+#ifdef notdef
+	serial_puts ( "Main is spinning\n" );
 	for ( ;; )
 	    ;
+#endif
 }
 
 /* THE END */
