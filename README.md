@@ -55,18 +55,26 @@ also connect ground.
 
 Here is a list of projects from 2017 ---
 
+1. loader - host side program to talk to serial bootloader.
+1. serial_boot - disassembly of the boot loader
+
 1. blink1 - very basic LED blinking
 2. blink1b - minor code cleanup on the above
 3. blink_ext - blink external LED on A0
 4. blink2 - more code reorganization and file grouping
 5. blink_maple - blink LED on PA5 rather than PC13  --M
+6. interrupt - do timer interrupts
+6. lcd - drive a 16x2 LCD module using i2c
 
 6. memory - figure out how to handle bss and initialized data --B
 7. i2c_maple - use libmaple for i2c DAC --B
 8. adc_serial - work with F103 adc --P
 
 9. serial1 - first working serial (uart) driver
-9. usb1 - get barely started working with USB
+9. lithium1 - lithium ion battery tester --P
+
+9. usb1 - get barely started working with USB --P
+
 
 Note that blink_maple is the only demo built to run on the Maple board.
 
@@ -77,5 +85,5 @@ The letters are: M = links for Maple, B = zeros BSS, P = includes printf
 The above work was done in 2017, I am beginning new work in 2023,
 focusing on learning about low level USB
 
-1. usb_tiny - echo server using the TinyUSB library
+1. usb2 - a copy of usb1 with new fixes  --P
 
