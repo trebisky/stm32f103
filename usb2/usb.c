@@ -1,5 +1,6 @@
 /* Usb.c
- * (c) Tom Trebisky  9-18-2017
+ *
+ * (c) Tom Trebisky  9-18-2017  11-1-2023
  *
  * Driver for the STM32F103 USB
  *
@@ -14,6 +15,11 @@
  * viewed by the CPU, we see 256 16 bit words accessed as 32 bit
  * objects and so there are 16 bit "holes" interleaved with the
  * actual RAM.  
+ *
+ * In case you are wondering (and you should be)
+ *  PMA stands for "packet memory area" and is the 512 byte
+ *  ram area set aside for USB.  Note that USB sees it starting
+ *  at a zero address.
  */
 
 #define NUM_EP		8
