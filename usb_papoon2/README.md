@@ -9,8 +9,3 @@ I have done in 2023.  I keep the papoon C++ code in a
 directory of its own and set up my makefile to deal with
 that and make minimal changes to let me call it from my
 C framework.
-
-This works!!  It yields /dev/ttyACM0 that echos whatever
-you type at it (I use picocom).
-
-I'll move on to usb_papoon2 for further work.

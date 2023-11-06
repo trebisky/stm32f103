@@ -86,4 +86,6 @@ The above work was done in 2017, I am beginning new work in 2023,
 focusing on learning about low level USB
 
 1. usb2 - a copy of usb1 with new fixes  --P
+2. usb_papoon - the papoon_usb framework and a working echo! -BP
+3. usb_papoon2 - the papoon_usb framework using interrupts -BP
 

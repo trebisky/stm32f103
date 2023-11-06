@@ -1,10 +1,9 @@
-/* usb1.c
+/* main.c
+ *
+ * This is papoon2, the second cut at working with
+ * the papoon C++ framework.
  *
  * (c) Tom Trebisky  9-18-2017
- *
- * Derived from my inter.c
- *
- * First cut at code to talk to USB
  *
  * This uses a serial console, which I connect as follows:
  *  I use a CP2102 usb to serial gadget, which has 5 pins and
@@ -37,11 +36,6 @@ void led_init ( int );
 
 void led_on ( void );
 void led_off ( void );
-
-/* Stubs to satisfy locore.s */
-void usb_hp_handler ( void ) {}
-void usb_lp_handler ( void ) {}
-void usb_wk_handler ( void ) {}
 
 
 /* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
@@ -113,7 +107,7 @@ startup ( void )
 
 	serial_init ();
 	printf ( " -- Booting ------------------------------\n" );
-	printf ( "STM32 usb_papoon demo starting\n" );
+	printf ( "STM32 usb_papoon2 demo starting\n" );
 
 	mem_init ();
 
@@ -127,49 +121,16 @@ startup ( void )
 	/* This gives a 1 ms rate */
 	systick_init_int ( 72 * 1000 );
 
-	// serial_puts ( "Hello World\n" );
-	/*
-	printf ( "Hello sailor ...\n" );
-	t = 0xdeadbeef;
-	printf ( "Data: %08x\n", t );
-	printf ( "Data: %08x\n", 0x1234abcd );
-	*/
-
-
-/* With this timer running, I see a waveform on A1, A2, A3 that is
- * 2 us high, 2 us low (250 kHz).
- * The timer I set up is indeed running at 250 kHz and is tim2
- * These pins are:
- *  A1 = PWM2/2
- *  A2 = PWM2/3
- *  A3 = PWM2/4
- */
-	// timer_init ();
-
-	// led_demo ();
-
-	// dump_usb_ram ();
-
 	printf ( "STM32 usb_papoon demo\n" );
 
 #ifdef notdef
-	// printf ( "systick count %d\n", systick_count );
-	systick_next = systick_count + 1000;
-
-	for ( ;; ) {
-	    // printf ( "Tock: %d %d\n", systick_count, systick_next );
-	    if ( systick_count > systick_next ) {
-		printf ( "Tick: %d\n", systick_count );
-		systick_next += 1000;
-	    }
-	}
-
 	big_delay ();
 	big_delay ();
 	pma_show ();
 #endif
 
-	papoon_main ();
+	// papoon_main ();
+	usb_init ();
 
 	serial_puts ( "Main is blinking\n" );
 	led_demo ();

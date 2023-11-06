@@ -21,7 +21,7 @@ DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
 #OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
-OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o papoon.o
+OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
 
 all: papoon.elf papoon.dump
 
@@ -61,6 +61,10 @@ gdb:
 gdbtui:
 	$(GDB) -tui --eval-command="target remote localhost:3333" papoon.elf
 
+tags:
+	ctags -R .
+
 clean:
 	cd papoon; make clean
 	rm -f *.o papoon.elf papoon.bin papoon.dump
+	rm -f tags
