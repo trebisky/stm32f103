@@ -23,7 +23,7 @@ GDB = $(TOOLS)-gdb
 #OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
 OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
 
-all: papoon.elf papoon.dump
+all: papoon.elf papoon.dump tags
 
 papoon.o:	bogus
 	cd papoon; make

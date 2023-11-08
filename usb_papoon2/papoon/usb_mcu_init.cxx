@@ -40,8 +40,8 @@ void usb_mcu_init()
 #endif
 
     // TJT is curious
-    printf ( "TJT PERIPH_BASE = %08x\n", PERIPH_BASE );
-    printf ( "TJT (addr) PERIPH_BASE = %08x\n", &PERIPH_BASE );
+    // printf ( "TJT PERIPH_BASE = %08x\n", PERIPH_BASE );
+    // printf ( "TJT (addr) PERIPH_BASE = %08x\n", &PERIPH_BASE );
 
     rcc->cr |= Rcc::Cr::HSEON;
     while(!rcc->cr.any(Rcc::Cr::HSERDY));

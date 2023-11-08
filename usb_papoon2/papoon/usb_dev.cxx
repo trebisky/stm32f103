@@ -23,6 +23,8 @@
 
 #include "usb_dev.hxx"
 
+extern int tjt_debug;
+
 
 namespace stm32f10_12357_xx {
 
@@ -247,13 +249,14 @@ bool UsbDev::init()
     set_address(0);
 
     _device_state = DeviceState::INITIALIZED;
+    printf ( "Device is now initialized\n" );
 
     return success;   // false if aborted endpoint search/parsing/initialization
 
 }  // init()
 
 
-
+#ifdef notdef_TJT
 #ifdef USB_DEV_FORCE_RESET_CAPABILITY  // see usb_dev.hxx
 void UsbDev::force_reset()
 {
@@ -262,7 +265,7 @@ void UsbDev::force_reset()
     usb->cntr =                   Usb::Cntr ::CTRM | Usb::Cntr::RESETM;
 }
 #endif
-
+#endif
 
 
 #ifndef USB_DEV_NO_BUFFER_RECV_SEND
@@ -292,7 +295,39 @@ const uint8_t           endpoint,   // trust caller for OUT endpoint
 
 }  // recv()
 
+void UsbDev::writ_pma_one(
+    const uint8_t  cc,
+    uint32_t* const   addr )
+{
+      uint32_t	*pma = addr                                   ;
 
+      // *pma = cc;
+      *pma = cc<<8 | cc;
+}
+
+void UsbDev::putc (
+    const uint8_t           endpoint,
+    uint8_t cc )
+{
+    int data_length = 1;
+
+    while ( !(_send_readys & (1 << endpoint)) )
+        ;
+
+    uint8_t     eprn_ndx = _epaddr2eprn[endpoint];
+
+    // writ_pma_data(data, _endpoints[eprn_ndx].send_pma, data_length);
+    writ_pma_one ( cc, _endpoints[eprn_ndx].send_pma );
+
+    _pma_descs.eprn(eprn_ndx).count_tx =   UsbBufDesc
+                                         ::CountTx
+                                         ::count_0(data_length);
+
+    usb->eprn(eprn_ndx).stat_tx(Usb::Epr::STAT_TX_VALID);
+
+    _send_readys &= ~(1 << endpoint);
+
+}  // putc()
 
 bool UsbDev::send(
 const uint8_t           endpoint   ,  // trust caller for OUT endpoint
@@ -324,11 +359,16 @@ const uint16_t          data_length)  // trust caller <= max_send_packet
 void UsbDev::interrupt_handler()
 {
 
-    if (stm32f103xb::usb->istr.any(Usb::Istr::RESET))
+    if (stm32f103xb::usb->istr.any(Usb::Istr::RESET)) {
+	if ( tjt_debug )
+	    printf ( "IH: usb reset\n" );
         reset();
+    }
 
-    while (stm32f103xb::usb->istr.any(Usb::Istr::CTR))
+    while (stm32f103xb::usb->istr.any(Usb::Istr::CTR)) {
+	// printf ( "IH: usb ctr\n" );
         ctr();
+    }
 
     // clear all interrupt bits
     usb->istr.clr(  Usb::Istr::PMAOVR
@@ -446,6 +486,7 @@ void UsbDev::reset()
         set_address(IMPOSSIBLE_DEV_ADDR);
 
     _device_state = DeviceState::RESET;
+    printf ( "Device is now reset\n" );
 
 }  // reset()
 
@@ -460,6 +501,10 @@ void UsbDev::ctr()  // CTR_LP()
     if (eprn_ndx == 0) {  // is control endpoint
         // ctr_tx can clear spontaneously (observerved) and also
         // possibly due to setting STAT_TX/STAT_RX
+	if ( tjt_debug ) {
+	    printf ( "CTR - control %08x\n", istr );
+	    pma_show ();
+	}
         bool    ctr_tx  = usb->EPRN<0>().any(Usb::Epr::CTR_TX),
                 ctr_stp = usb->EPRN<0>().any(Usb::Epr::SETUP ); // can change
 
@@ -491,6 +536,11 @@ void UsbDev::ctr()  // CTR_LP()
 
     else {  // normal endpoint
         uint8_t     epaddr = _eprn2epaddr[eprn_ndx];
+
+	if ( tjt_debug ) {
+	    printf ( "CTR - normal %d %08x\n", eprn_ndx, istr );
+	    pma_show ();
+	}
 
         if (usb->eprn(eprn_ndx).any(Usb::Epr::CTR_RX)) {
             _recv_readys |= 1 << epaddr;
@@ -602,6 +652,7 @@ bool UsbDev::device_request()
             _current_configuration = _setup_packet->value.bytes.byte0;
             _send_readys           = _send_readys_pending            ;
             _device_state          = DeviceState::CONFIGURED         ;
+	    printf ( "Device is now configured\n" );
 
             set_configuration();  // notify derived class if interested
             _send_info.reset ();  // just in case
@@ -874,6 +925,7 @@ const uint8_t   address)
     usb->daddr = Usb::Daddr::add(address) | Usb::Daddr::EF;
 
     _device_state = DeviceState::ADDRESSED;
+    printf ( "Device is now addressed\n" );
 
 }  // set_address()
 

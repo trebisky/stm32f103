@@ -51,12 +51,66 @@ papoon_init ( void )
     usb_dev.init();
 
 #ifdef USB_POLL
+    printf ( "Waiting for papoon init\n" );
     while (usb_dev.device_state() != UsbDev::DeviceState::CONFIGURED)
         usb_dev.poll();
-#else
-    while (usb_dev.device_state() != UsbDev::DeviceState::CONFIGURED)
-        ;
 #endif
+
+    // papoon_wait ( 8 );
+
+    printf ( "Papoon initialization done\n" );
+    printf ( "  state = %d\n", usb_dev.device_state() );
+}
+
+extern "C" int
+is_papoon_configured ( void )
+{
+    if (usb_dev.device_state() == UsbDev::DeviceState::CONFIGURED)
+	return 1;
+    else
+	return 0;
+}
+
+extern "C" void
+papoon_wait ( int sec )
+{
+	int tmo = sec * 1000;
+
+	while ( tmo-- ) {
+	    delay_ms ( 1 );
+	    if ( usb_dev.device_state() == UsbDev::DeviceState::CONFIGURED ) {
+		printf ( " Wait for enumeration suceeded\n" );
+		printf ( "  state = %d\n", usb_dev.device_state() );
+		return;
+	    }
+	}
+	printf ( " Wait for enumeration timed out\n" );
+	printf ( "  state = %d\n", usb_dev.device_state() );
+}
+
+
+int tjt_debug = 0;
+
+extern "C" void
+papoon_debug ( void )
+{
+	tjt_debug = 1;
+}
+
+// XXX break into 64 byte chunks
+extern "C" void
+papoon_send ( const uint8_t *buf, int len )
+{
+	printf ( "Papoon send %d: %s\n", len, buf );
+	while ( ! usb_dev.send ( UsbDevCdcAcm::CDC_ENDPOINT_IN, buf, len ) )
+	    ;
+}
+
+extern "C" void
+papoon_putc ( const uint8_t cc )
+{
+	// usb_dev.putc ( UsbDevCdcAcm::CDC_ENDPOINT_IN, cc );
+	usb_dev.send ( UsbDevCdcAcm::CDC_ENDPOINT_IN, &cc, 1 );
 }
 
 /* Note that send() should never be called with more than 64 bytes
@@ -66,6 +120,7 @@ papoon_init ( void )
 extern "C" void
 papoon_demo ( void )
 {
+    printf ( "Papoon demo starting\n" );
     while (true) {
         uint16_t    recv_len,
                     send_len;

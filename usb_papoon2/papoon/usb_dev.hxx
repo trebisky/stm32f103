@@ -319,6 +319,13 @@ class UsbDev {
     bool send(const uint8_t         endpoint,
               const uint8_t* const  data    ,
               const uint16_t        length  );
+
+    // TJT added 11-7-2023
+    void writ_pma_one (uint8_t cc,
+	    uint32_t *addr );
+
+    void putc ( const uint8_t         endpoint,
+		const uint8_t		cc );
 #endif
 
     // for use with direct access to hardware USB buffers, below

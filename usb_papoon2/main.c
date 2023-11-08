@@ -37,7 +37,31 @@ void led_init ( int );
 void led_on ( void );
 void led_off ( void );
 
+/* Sorta close to 1 ms with 72 Mhz processor */
+static void
+delay_one_ms ( void )
+{
+        volatile int count = 7273;
 
+        while ( count-- )
+            ;
+}
+
+void
+delay_ms ( int ms )
+{
+        while ( ms-- )
+            delay_one_ms ();
+}
+
+void
+delay_sec ( int sec )
+{
+        while ( sec-- )
+            delay_ms ( 1000 );
+}
+
+#ifdef notdef
 /* By itself, with an 8 Mhz clock this gives a blink rate of about 2.7 Hz
  *  so the delay is about 185 ms
  * With a 72 Mhz clock this yields a 27.75 ms delay
@@ -60,6 +84,7 @@ big_delay ( void )
 	while ( count-- )
 	    ;
 }
+#endif
 
 #define PC13	13
 #define NBLINKS		2
@@ -69,7 +94,8 @@ static void
 led_show ( void )
 {
 	led_on ();
-	delay ();
+	// delay ();
+	delay_ms ( 500 );
 	led_off ();
 }
 
@@ -82,16 +108,19 @@ led_demo ( void )
 	for ( ;; ) {
 	    for ( i=0; i<NBLINKS; i++ ) {
 		led_on ();
-		delay ();
-		delay ();
+		// delay ();
+		// delay ();
+		delay_ms ( 50 );
 		led_off ();
-		delay ();
-		delay ();
+		// delay ();
+		// delay ();
+		delay_ms ( 50 );
 	    }
 
-	    big_delay ();
-	    big_delay ();
-	    big_delay ();
+	    delay_ms ( 1500 );
+	    // big_delay ();
+	    // big_delay ();
+	    // big_delay ();
 	}
 }
 

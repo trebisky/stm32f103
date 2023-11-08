@@ -123,7 +123,7 @@ sprintu( char *buf, char *end, unsigned int n, int b)
 
 static int VSNPRINTF ( char *, unsigned int, const char *, va_list );
 
-static int
+int
 snprintf(char * buf, unsigned int size, const char *fmt, ...)
 {
         va_list args;
@@ -135,7 +135,16 @@ snprintf(char * buf, unsigned int size, const char *fmt, ...)
         return rv;
 }
 
+static int
+vsprintf(char *buf, const char *fmt, va_list args)
+{
+        // return vsnprintf(buf, 0xFFFFFFFFUL, fmt, args);
+        // return vsnprintf(buf, 0x0FFFFFFFUL, fmt, args);
+        return vsnprintf(buf, (unsigned int) 0xFFFFFFFF, fmt, args);
+}
+
 #ifdef notdef
+/* Something fishy here */
 static int
 sprintf(char *buf, const char *fmt, ...)
 {
@@ -148,14 +157,6 @@ sprintf(char *buf, const char *fmt, ...)
         return rv;
 }
 #endif
-
-static int
-vsprintf(char *buf, const char *fmt, va_list args)
-{
-        // return vsnprintf(buf, 0xFFFFFFFFUL, fmt, args);
-        // return vsnprintf(buf, 0x0FFFFFFFUL, fmt, args);
-        return vsnprintf(buf, (unsigned int) 0xFFFFFFFF, fmt, args);
-}
 
 /* XXX size should/could really be size_t
  * (which is unsigned long/int)
