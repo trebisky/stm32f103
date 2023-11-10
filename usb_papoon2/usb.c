@@ -31,15 +31,27 @@ struct usb {
         vu32 epr[NUM_EP];     /* 00 - endpoint registers */
             u32        _pad0[8];
         vu32 ctrl;    /* 40 */
-        vu32 istatus; /* 44 - interrupt status */
+        vu32 isr;     /* 44 - interrupt status */
         vu32 fnr;     /* 48 - frame number */
         vu32 daddr;   /* 4c - device address */
         vu32 btable;  /* 50 - buffer table */
 };
 
+/* Interrupt bits (shared by control and isr */
+#define INT_CTR		BIT(15)
+#define INT_PMA		BIT(14)
+#define INT_ERR		BIT(13)
+#define INT_WKUP	BIT(12)
+#define INT_SUSP	BIT(11)
+#define INT_RESET	BIT(10)
+#define INT_SOF		BIT(9)
+#define INT_ESOF	BIT(8)
+
 /* Bits in the Control Register */
-#define CTRL_CTRM	BIT(15)
-#define CTRL_RESETM	BIT(10)
+#define CTRL_RESUME	BIT(4)
+#define CTRL_FSUSP	BIT(3)
+#define CTRL_LP_MODE	BIT(2)
+#define CTRL_PDWN	BIT(1)
 #define CTRL_FRES	BIT(0)
 
 #define USB_HP_IRQ	19
@@ -99,6 +111,12 @@ static int debug = 0;
 
 static int lp_count = 0;
 
+/* As soon as we plug the cable in, we start getting
+ * lots of SOF interrupts, before and during and
+ * after enumeration.  The host causes this.
+ */
+static int sof_count = 0;
+
 void
 usb_lp_handler ( void )
 {
@@ -107,20 +125,39 @@ usb_lp_handler ( void )
 	if ( debug )
 	    printf ( "USB lp interrupt %d\n", ++lp_count );
 
+	/* We see 913 SOF per second.
+	 * This confirms that we can clear the INT_SOF bit in the isr
+	 * We also gate off the interrupt by clearing the bit in CTR.
+	 */
+	if ( up->isr & INT_SOF ) {
+	    if ( sof_count > 5000 ) {
+		up->ctrl &= ~INT_SOF;
+		// up->isr = INT_CTR | INT_RESET;
+		printf ( "Last SOF, isr, ctrl = %04x %04x\n", up->isr, up->ctrl );
+	    }
+	    // printf ( "SOF int\n" );
+	    // everything but INT_SOF
+	    up->isr = INT_CTR | INT_RESET;
+	    if ( sof_count > 5000 )
+		printf ( "Last SOF, final isr, ctrl = %04x %04x\n", up->isr, up->ctrl );
+
+	    sof_count++;
+	}
+
 #ifdef notdef
 	/* It turns out the "force reset" bit thing is more or less useless
 	 * and not what we want to do.  More on this later.
 	 */
-	if ( up->istatus & CTRL_RESETM ) {
-	    printf ( "USB istatus before reset: %04x\n", up->istatus );
+	if ( up->isr & CTRL_RESETM ) {
+	    printf ( "USB isr before reset: %04x\n", up->isr );
 	    force_reset ();
 	    /* The datasheet recommends clearning in this fashion.
 	     * The datasheet labels the interrupt bits as rc_w0
 	     * This means the bit can be read,
 	     * Writing 0 clears it, Writing 1 does nothing.
 	     */
-	    up->istatus = CTRL_CTRM;
-	    printf ( "USB istatus after reset: %04x\n", up->istatus );
+	    up->isr = CTRL_CTRM;
+	    printf ( "USB isr after reset: %04x\n", up->isr );
 	}
 #endif
 
@@ -167,7 +204,7 @@ pma_show ( void )
 
         printf ( "BTABLE = %08x\n", up->btable );
         printf ( "CTRL  = %08x\n", up->ctrl );
-        printf ( "ISTAT = %08x\n", up->istatus );
+        printf ( "ISR   = %08x\n", up->isr );
         printf ( "EPR-0 = %08x\n", up->epr[0] );
         printf ( "EPR-1 = %08x\n", up->epr[1] );
 
@@ -307,6 +344,46 @@ test3 ( void )
 	}
 }
 
+/* I see 913 SOF per second.
+ * My delay_ms may not be precise, so this is an estimate.
+ *
+ * We still see the SOF bit getting set in the isr register
+ * even after we turn it off in the ctrl register.
+ * This confirms that interrupt events do get posted in
+ * the isr register, even if they are not enabled, hence
+ * we could poll for and clear them if desired.
+ */
+static void
+test4 ( void )
+{
+	int last = 0;
+	int cur;
+	int num;
+        struct usb *up = USB_BASE;
+
+	for ( ;; ) {
+	    delay_ms ( 1000 );
+	    cur = sof_count;
+	    num = cur-last;
+	    last = cur;
+	    // if ( num )
+		printf ( "SOF count = %d, %d %04x\n", num, cur, up->isr );
+	}
+}
+
+/* After papoon_init() we have a chance to
+ * fool around.  This may grow into our
+ * own usb_init()
+ */
+void
+hack_init ( void )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	up->ctrl |= INT_SOF;
+}
+
 /*
  *
  * Starting this up is a bit problematic.
@@ -334,6 +411,7 @@ usb_init ( void )
 	// papoon_debug ();
 
 	papoon_init ();
+	hack_init ();
 
 	// fairly useless
 	papoon_wait ( 10 );
@@ -346,6 +424,7 @@ usb_init ( void )
 	// test1 ();
 	test2 ();
 	// test3 ();
+	// test4 ();
 }
 
 /* THE END */
