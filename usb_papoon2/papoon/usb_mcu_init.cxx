@@ -17,9 +17,9 @@
 // (LICENSE.txt) along with the papoon_usb program.  If not, see
 // <https://www.gnu.org/licenses/gpl.html>
 
-#include <papoon.hxx>
+#include <papoon.h>
 
-#include <stm32f103xb.hxx>
+#include <stm32f103xb.h>
 
 
 namespace stm32f10_12357_xx {

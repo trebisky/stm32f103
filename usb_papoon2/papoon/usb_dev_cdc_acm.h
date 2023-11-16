@@ -27,7 +27,7 @@
 #endif
 
 
-#include <usb_dev.hxx>
+#include <usb_dev.h>
 
 #if USB_DEV_MAJOR_VERSION == 1
 #if USB_DEV_MINOR_VERSION  < 0

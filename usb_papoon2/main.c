@@ -37,21 +37,49 @@ void led_init ( int );
 void led_on ( void );
 void led_off ( void );
 
-/* Sorta close to 1 ms with 72 Mhz processor */
+/* Sorta close to 1 ms with 72 Mhz processor.
+ * It actually turns out to give 0.913 milliseconds
+ * with the current compiler and the CPU at 72 Mhz.
+ */
+// #define DELAY_MAGIC 7273
+
+/* some experiments along with examination of the
+ * disassembled code reveal that the loop body
+ * consists of 5 instructions that use 9 cycles
+ * to run.  So this number is correct in theory,
+ * but all bets are off if the compiler does better.
+ */
+#define DELAY_MAGIC 8000
+
 static void
 delay_one_ms ( void )
 {
-        volatile int count = 7273;
+        volatile int count = 8000;
 
         while ( count-- )
             ;
 }
 
+#ifdef notdef
+/* I currently (Nov, 2023) compile with -O2.  When I do this,
+ * the compiler is clever enough to inline the above function,
+ * which is certainly fine, though interesting.
+ */
 void
 delay_ms ( int ms )
 {
         while ( ms-- )
             delay_one_ms ();
+}
+#endif
+
+void
+delay_ms ( int ms )
+{
+        volatile int count = ms * 8000;
+
+        while ( count-- )
+            ;
 }
 
 void

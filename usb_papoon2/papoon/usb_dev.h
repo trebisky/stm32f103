@@ -25,7 +25,7 @@
 #define USB_DEV_MINOR_VERSION   2
 #define USB_DEV_MICRO_VERSION   1
 
-#include <stm32f103xb.hxx>
+#include <stm32f103xb.h>
 
 #if STM32F103XB_MAJOR_VERSION == 1
 #if STM32F103XB_MINOR_VERSION  < 2

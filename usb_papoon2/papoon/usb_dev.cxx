@@ -17,11 +17,11 @@
 // (LICENSE.txt) along with the papoon_usb program.  If not, see
 // <https://www.gnu.org/licenses/gpl.html>
 
-#include <papoon.hxx>
+#include <papoon.h>
 
-#include <bin_to_hex.hxx>
+#include <bin_to_hex.h>
 
-#include "usb_dev.hxx"
+#include "usb_dev.h"
 
 extern int tjt_debug;
 
@@ -311,8 +311,8 @@ void UsbDev::putc (
 {
     int data_length = 1;
 
-    while ( !(_send_readys & (1 << endpoint)) )
-        ;
+    //while ( !(_send_readys & (1 << endpoint)) )
+    //    ;
 
     uint8_t     eprn_ndx = _epaddr2eprn[endpoint];
 
@@ -348,7 +348,6 @@ const uint16_t          data_length)  // trust caller <= max_send_packet
     usb->eprn(eprn_ndx).stat_tx(Usb::Epr::STAT_TX_VALID);
 
     _send_readys &= ~(1 << endpoint);
-
     return true;
 
 }  // send()
@@ -362,6 +361,7 @@ void UsbDev::interrupt_handler()
     if (stm32f103xb::usb->istr.any(Usb::Istr::RESET)) {
 	if ( tjt_debug )
 	    printf ( "IH: usb reset\n" );
+	tjt_enum_logger ( 2 );
         reset();
     }
 
@@ -498,6 +498,18 @@ void UsbDev::ctr()  // CTR_LP()
 
     uint8_t     eprn_ndx = istr >> Usb::Istr::EP_ID_SHFT;
 
+#ifdef notdef
+    // this gives us the value 15, which is meaningless.
+    // printf ( "EP_ID_SHFT = %d\n", Usb::Istr::EP_ID_SHFT );
+    // The above is not a shift, there is a fancy overloaded
+    // operator in regbits.
+    if ( eprn_ndx != 0 ) {
+	printf ( "EP_ID_SHFT = %d\n", Usb::Istr::EP_ID_SHFT );
+	printf ( "istr = %08x\n", istr );
+	printf ( "eprn_ndx = %d\n", eprn_ndx );
+    }
+#endif
+
     if (eprn_ndx == 0) {  // is control endpoint
         // ctr_tx can clear spontaneously (observerved) and also
         // possibly due to setting STAT_TX/STAT_RX
@@ -505,6 +517,7 @@ void UsbDev::ctr()  // CTR_LP()
 	    printf ( "CTR - control %08x\n", istr );
 	    pma_show ();
 	}
+
         bool    ctr_tx  = usb->EPRN<0>().any(Usb::Epr::CTR_TX),
                 ctr_stp = usb->EPRN<0>().any(Usb::Epr::SETUP ); // can change
 
@@ -518,6 +531,7 @@ void UsbDev::ctr()  // CTR_LP()
         // have EPRN<0> CTR_TX in addition to CTR_RX, as happens normally
         // when ISTR DIR flag is clear
         if (usb->EPRN<0>().any(Usb::Epr::CTR_RX)) {
+	    tjt_enum_logger ( 0 );
             usb->EPRN<0>().clear(Usb::Epr::CTR_RX);
             if (ctr_stp /*usb->EPRN<0>().any(Usb::Epr::SETUP*/)
                 setup();
@@ -529,6 +543,7 @@ void UsbDev::ctr()  // CTR_LP()
         // in setup() and/or control_out(), and also might have been
         // set by hardware during their execution
         if (ctr_tx || usb->EPRN<0>().any(Usb::Epr::CTR_TX)) {
+	    tjt_enum_logger ( 1 );
             usb->EPRN<0>().clear(Usb::Epr::CTR_TX);
             control_in();
         }

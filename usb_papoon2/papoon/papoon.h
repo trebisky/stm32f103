@@ -12,6 +12,7 @@ extern "C" void printf ( const char *, ... );
 // extern "C" void delay ( void );
 extern "C" void delay_ms ( int );
 extern "C" void pma_show ( void );
+extern "C" void tjt_enum_logger ( int what );
 
 #define USB_DEV_INTERRUPT_DRIVEN
 

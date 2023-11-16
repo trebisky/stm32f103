@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-#include <regbits.hxx>
+#include <regbits.h>
 
 
 #if REGBITS_MAJOR_VERSION == 1
@@ -1853,7 +1853,7 @@ static_assert(sizeof(DmaChannel) == 16, "sizeof(DmaChannel) != 16");
 
 struct Tim
 {
-#include "stm32f103xb_tim.hxx"
+#include "stm32f103xb_tim.h"
 };
 static_assert(sizeof(Tim) == 84, "sizeof(Tim) != 84");
 
@@ -1864,7 +1864,7 @@ static_assert(sizeof(Tim) == 84, "sizeof(Tim) != 84");
 struct AdvTim_1
 {
 #define STM32F103XB_ADV_TIM_1
-#include "stm32f103xb_tim.hxx"
+#include "stm32f103xb_tim.h"
 #undef STM32F103XB_ADV_TIM_1
 };  // struct AdvTim_1
 static_assert(sizeof(AdvTim_1) == 84, "sizeof(AdvTim_1) != 84");
@@ -1872,7 +1872,7 @@ static_assert(sizeof(AdvTim_1) == 84, "sizeof(AdvTim_1) != 84");
 struct GenTim_2_3_4
 {
 #define STM32F103XB_GEN_TIM_2_3_4
-#include "stm32f103xb_tim.hxx"
+#include "stm32f103xb_tim.h"
 #undef STM32F103XB_GEN_TIM_2_3_4
 };  // struct GenTim_2_3_4
 static_assert(sizeof(GenTim_2_3_4) == 84, "sizeof(GenTim_2_3_4) != 84");

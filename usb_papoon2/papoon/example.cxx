@@ -17,14 +17,14 @@
 // (LICENSE.txt) along with the papoon_usb program.  If not, see
 // <https://www.gnu.org/licenses/gpl.html>
 
-#include <papoon.hxx>
+#include <papoon.h>
 
 // #include <core_cm3.hxx>
 // #include <stm32f103xb.hxx>
 
-#include <usb_dev_cdc_acm.hxx>
+#include <usb_dev_cdc_acm.h>
 
-#include <usb_mcu_init.hxx>
+#include <usb_mcu_init.h>
 
 
 using namespace stm32f10_12357_xx;
@@ -106,11 +106,15 @@ papoon_send ( const uint8_t *buf, int len )
 	    ;
 }
 
+/* Here we see the "56" bug -- or something worse!! */
 extern "C" void
 papoon_putc ( const uint8_t cc )
 {
-	// usb_dev.putc ( UsbDevCdcAcm::CDC_ENDPOINT_IN, cc );
-	usb_dev.send ( UsbDevCdcAcm::CDC_ENDPOINT_IN, &cc, 1 );
+	// This doesn't work at all !!!
+	usb_dev.putc ( UsbDevCdcAcm::CDC_ENDPOINT_IN, cc );
+
+	// The following yields 56 bug
+	// usb_dev.send ( UsbDevCdcAcm::CDC_ENDPOINT_IN, &cc, 1 );
 }
 
 /* Note that send() should never be called with more than 64 bytes
