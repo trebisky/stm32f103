@@ -567,11 +567,14 @@ class UsbDev {
 
     static const uint32_t   _BTABLE_OFFSET = 0;
 
+    /* 11-17-2023 tjt changed SERIAL ..LEN from 24 to 4
+                            _SERIAL_NUMBER_STRING_NDX        =  3,
+                            _SERIAL_NUMBER_STRING_LEN        = 24,
+     */
     static const uint8_t    _DESCRIPTOR_SIZE_NDX             =  0,
                             _DEVICE_DESC_MAX_PACKET_SIZE_NDX =  7,
                             _DEVICE_DESC_NUM_CONFIGS_NDX     = 17,
-                            _SERIAL_NUMBER_STRING_NDX        =  3,
-                            _SERIAL_NUMBER_STRING_LEN        = 24,
+                            _SERIAL_NUMBER_STRING_LEN        =  4,
                             _ENDPOINT_DESC_ADDRESS_NDX       =  2,
                             _ENDPOINT_DESC_ATTRIBUTES_NDX    =  3,
                             _ENDPOINT_DESC_PACKET_SIZE_NDX   =  4;

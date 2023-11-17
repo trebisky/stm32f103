@@ -44,7 +44,8 @@ papoon_handler ( void )
 extern "C" void
 papoon_init ( void )
 {
-    usb_dev.serial_number_init();
+    // nonsense
+    // usb_dev.serial_number_init();
 
     usb_mcu_init();
 
@@ -59,7 +60,7 @@ papoon_init ( void )
     // papoon_wait ( 8 );
 
     printf ( "Papoon initialization done\n" );
-    printf ( "  state = %d\n", usb_dev.device_state() );
+    // printf ( "  state = %d\n", usb_dev.device_state() );
 }
 
 extern "C" int

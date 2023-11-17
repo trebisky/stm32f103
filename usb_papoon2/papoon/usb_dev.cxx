@@ -19,8 +19,6 @@
 
 #include <papoon.h>
 
-#include <bin_to_hex.h>
-
 #include "usb_dev.h"
 
 extern int tjt_debug;
@@ -34,10 +32,25 @@ using namespace stm32f103xb;
 
 // public
 
+/* Papoon produces this gigantic serial number:
+ * SerialNumber: 8717472853518850066fff48
+ *  yes -- 24 characters.
+ * perhaps as some kind of joke or as a proof of concept
+ *  or something.  But we are no longer amused and
+ *  want to use something small and simple.
+ *
+ * the length is wired in as 24 (see usb_dev.h)
+ * I changed the length  to 4 and the value to "1313".
+ */
+//#include <bin_to_hex.h>
+
+
 void UsbDev::serial_number_init()  // do before mcu_init() clock speed breaks
 {
+#ifdef notdef
     char    serial_number[_SERIAL_NUMBER_STRING_LEN];
 
+    /* 4 + 4 * 2 + 2 = 12 16 bit items */
     bitops::BinToHex::uint32(elec_sig->u_id_95_64, &serial_number[ 0]);
     bitops::BinToHex::uint32(elec_sig->u_id_63_32, &serial_number[ 8]);
     bitops::BinToHex::uint16(elec_sig->u_id_31_16, &serial_number[16]);
@@ -47,9 +60,8 @@ void UsbDev::serial_number_init()  // do before mcu_init() clock speed breaks
         // little-endian uint16_t
           reinterpret_cast<uint16_t*>(&_SERIAL_NUMBER_STRING_DESC[2])[ndx]
         = serial_number[ndx];
+#endif
 }
-
-
 
 bool UsbDev::init()
 {
@@ -396,9 +408,9 @@ const Usb::Epr::mskd_t  UsbDev::_DESC_EP_TYPE_TO_EPR_EP_TYPE[] = {
 const uint8_t   UsbDev::_LANGUAGE_ID_STRING_DESC[] = {
                 4,
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
-                0x09, 0x04},         // language codes
+                0x09, 0x04};         // language codes
 
-                UsbDev::_VENDOR_STRING_DESC[] = {
+const uint8_t	UsbDev::_VENDOR_STRING_DESC[] = {
                 38,
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
                 'S', 0, 'T', 0, 'M', 0, 'i', 0,
@@ -407,18 +419,11 @@ const uint8_t   UsbDev::_LANGUAGE_ID_STRING_DESC[] = {
                 'r', 0, 'o', 0, 'n', 0, 'i', 0,
                 'c', 0, 's', 0                }; // "STMicroelectronics"
 
-      uint8_t   UsbDev::_SERIAL_NUMBER_STRING_DESC[] = {
+uint8_t   UsbDev::_SERIAL_NUMBER_STRING_DESC[] = {
                 _SERIAL_NUMBER_STRING_LEN * 2 + 4,
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
-                '0', 0, '0', 0, '0', 0, '0', 0,
-                '0', 0, '0', 0, '0', 0, '0', 0,
-                '0', 0, '0', 0, '0', 0, '0', 0,
-                '0', 0, '0', 0, '0', 0, '0', 0,
-                '0', 0, '0', 0, '0', 0, '0', 0,
-                '0', 0, '0', 0, '0', 0, '0', 0,
+                '1', 0, '3', 0, '1', 0, '3', 0,
                  0,  0                        };    // terminating null
-
-
 
 
 void UsbDev::reset()

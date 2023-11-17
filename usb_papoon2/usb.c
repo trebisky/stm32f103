@@ -742,10 +742,10 @@ usb_init ( void )
 	hack_init ();
 
 	// fairly useless
-	papoon_wait ( 10 );
+	// papoon_wait ( 10 );
 
-	btable_show ();
-	pma_show ();
+	// btable_show ();
+	// pma_show ();
 
 	// debug = 1;
 	// papoon_debug ();
