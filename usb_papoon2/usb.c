@@ -210,6 +210,17 @@ usb_lp_handler ( void )
 	papoon_handler ();
 }
 
+/* Quick and dirty */
+static void
+memset ( char *buf, int val, int count )
+{
+	char *p = buf;
+	int i;
+
+	for ( i=0; i<count; i++ )
+	    *p++ = val;
+}
+
 /* PMA (packet memory array) is 512 bytes of SRAM
  * The usb controller sees it as an array of 16 bit words.
  * The ARM sees it as 16 bit words inside 32 bit words.
@@ -228,12 +239,15 @@ usb_lp_handler ( void )
 void
 pma_clear ( void )
 {
-	int i;
 	u32 *p;
+	// int i;
 
-        p = USB_RAM;
-	for ( i=0; i<256; i++ ) 
-	    *p++ = 0;
+        // p = USB_RAM;
+	// for ( i=0; i<256; i++ ) 
+	//     *p++ = 0;
+
+	// memset ( (char *) USB_RAM, 0xea, 1024 );
+	memset ( (char *) USB_RAM, 0x0, 1024 );
 
         p = USB_RAM;
 	p[254] = 0xdead;
@@ -472,7 +486,9 @@ test4 ( void )
 struct enum_log_e {
 	int what;
 	int count;
-	u32 addr;
+	// u32 addr;
+	u32 istr;
+	u32 epr;
 	char *data;
 };
 
@@ -481,17 +497,24 @@ static struct enum_log_e e_log[50];
 static int e_count = 0;
 
 /* We see 287 bytes */
-static char save_buf[400];
+#define SAVE_SIZE	400
+
+static char save_buf[SAVE_SIZE];
 static int s_count = 0;
 
 /* Copy from PMA memory to buffer */
 static void
-pma_copy ( u32 pma, char *buf, int count )
+pma_copy ( u32 pma_off, char *buf, int count )
 {
 	int i;
 	int num = (count + 1) / 2;
-	u32 *pp = (u32 *) pma;
 	u16 *bp = (u16 *) buf;
+	u32 *pp;
+	u32 addr;
+
+	addr = (u32) USB_RAM;
+	addr += 2 * pma_off;
+	pp = (u32 *) addr;
 
 	for ( i=0; i<num; i++ )
 	    *bp++ = *pp++;
@@ -513,40 +536,6 @@ enum_saver ( u32 addr, int count )
 	return rv;
 }
 
-/* Called from papoon on CTR interrupts on
- * endpoint 0
- * what = 0 is Rx, 1 is Tx
- */
-void
-tjt_enum_logger ( int what )
-{
-	struct enum_log_e *ep;
-	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
-	struct btable_entry *bte;
-	u32 addr = (u32) USB_RAM;
-
-	bte = &bt[0];
-
-	// Even printing this breaks enumeration.
-	// printf ( "enum %d\n", what );
-
-	ep = &e_log[e_count];
-	ep->what = what;
-	ep->count = 0;
-	if ( what == 1 ) {	// Tx
-	    ep->count = bte->tx_count;
-	    ep->addr = addr + 2 * bte->tx_addr;
-	    ep->data = enum_saver ( bte->tx_addr, bte->tx_count );
-	}
-	if ( what == 0 ) {	// Rx
-	    ep->count = bte->rx_count & 0x3ff;
-	    ep->addr = addr + 2 * bte->rx_addr;
-	    ep->data = enum_saver ( bte->rx_addr, bte->rx_count );
-	}
-
-	e_count++;
-}
-
 static void
 print_buf ( char *data, int count )
 {
@@ -561,25 +550,84 @@ print_buf ( char *data, int count )
 	printf ( "\n" );
 }
 
+/* ***************************************** */
+/* Called from papoon on CTR interrupts on
+ * endpoint 0
+ * what = 0 is Rx, 1 is Tx
+ */
+void
+tjt_enum_logger ( int what )
+{
+	struct enum_log_e *ep;
+	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
+	struct btable_entry *bte;
+	static int first = 1;
+
+        struct usb *up = USB_BASE;
+	u32 addr = (u32) USB_RAM;
+
+	if ( first && what != 2 )
+	    pma_show ();
+
+	bte = &bt[0];
+
+	// Even printing this breaks enumeration.
+	// printf ( "enum %d\n", what );
+
+	ep = &e_log[e_count];
+	ep->what = what;
+	ep->count = 0;
+	ep->istr = up->isr;
+	ep->epr = up->epr[0];
+
+	if ( what == 1 ) {	// Tx
+	    ep->count = bte->tx_count;
+	    //ep->addr = addr + 2 * bte->tx_addr;
+	    ep->data = enum_saver ( bte->tx_addr, bte->tx_count );
+	}
+
+	if ( what == 0 ) {	// Rx
+	    ep->count = bte->rx_count & 0x3ff;
+	    // ep->addr = addr + 2 * bte->rx_addr;
+	    ep->data = enum_saver ( bte->rx_addr, bte->rx_count );
+	}
+
+	if ( first && what != 2 ) {
+	    printf ( "buf (%d): ", ep->count );
+	    print_buf ( ep->data, ep->count );
+	    printf ( "\n" );
+	    first = 0;
+	}
+
+	e_count++;
+}
+
 void
 enum_log_show ( void )
 {
 	int i;
 	struct enum_log_e *ep;
+	char *wstr;
+	char *sstr;
+
+	// printf ( "Log entries: %d\n", e_count );
 
 	for ( i=0; i<e_count; i++ ) {
 	    ep = &e_log[i];
-	    if ( ep->what == 2 )
+	    if ( ep->what == 2 ) {
 		printf ( "%3d Enum Reset\n", i );
-	    else if ( ep->what == 1 ) {
-		printf ( "%3d Enum Tx %2d %08x", i, ep->count, ep->addr );
-		print_buf ( ep->data, ep->count );
+		continue;
 	    }
-	    else {
-		printf ( "%3d Enum Rx %2d %08x", i, ep->count, ep->addr );
-		print_buf ( ep->data, ep->count );
-	    }
+
+	    wstr = ep->what == 1 ? "Tx" : "Rx";
+	    sstr = ep->epr & EP_SETUP ? "S" : " ";
+
+	    // printf ( "%3d Enum %s %2d %08x", i, wstr, ep->count, ep->addr );
+	    // printf ( "%3d Enum %s %s %04x %2d %08x", i, wstr, sstr, ep->epr, ep->count, ep->addr );
+	    printf ( "%3d Enum %s %s %04x %04x %2d", i, wstr, sstr, ep->istr, ep->epr, ep->count );
+	    print_buf ( ep->data, ep->count );
 	}
+
 	printf ( "Total bytes saved: %d\n", s_count );
 }
 
@@ -590,6 +638,7 @@ static void
 test5 ( void )
 {
 	s_count = 0;
+	memset ( save_buf, 0xaa, SAVE_SIZE );
 
 	while ( ! is_papoon_configured () )
 	    ;
@@ -708,8 +757,12 @@ usb_init ( void )
 	// test3 ();
 	// test4 ();
 
+	// papoon_debug ();
+
 	// run enumeration detailer
 	test5 ();
+	// follow it with the papooon echo demo
+	// test1 ();
 }
 
 /* THE END */
