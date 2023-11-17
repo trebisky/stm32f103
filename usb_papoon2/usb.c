@@ -561,7 +561,7 @@ tjt_enum_logger ( int what )
 	struct enum_log_e *ep;
 	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
 	struct btable_entry *bte;
-	static int first = 1;
+	static int first = 0;
 
         struct usb *up = USB_BASE;
 	u32 addr = (u32) USB_RAM;
@@ -762,7 +762,7 @@ usb_init ( void )
 	// run enumeration detailer
 	test5 ();
 	// follow it with the papooon echo demo
-	// test1 ();
+	test1 ();
 }
 
 /* THE END */
