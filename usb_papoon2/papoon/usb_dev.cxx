@@ -410,6 +410,7 @@ const uint8_t   UsbDev::_LANGUAGE_ID_STRING_DESC[] = {
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
                 0x09, 0x04};         // language codes
 
+#ifdef notdef
 const uint8_t	UsbDev::_VENDOR_STRING_DESC[] = {
                 38,
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
@@ -418,6 +419,16 @@ const uint8_t	UsbDev::_VENDOR_STRING_DESC[] = {
                 'l', 0, 'e', 0, 'c', 0, 't', 0,
                 'r', 0, 'o', 0, 'n', 0, 'i', 0,
                 'c', 0, 's', 0                }; // "STMicroelectronics"
+#endif
+
+const uint8_t	UsbDev::_VENDOR_STRING_DESC[] = {
+                38,
+                static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
+                'S', 0, 'T', 0, ' ', 0, 'a', 0,
+                'n', 0, 'd', 0, ' ', 0, 'U', 0,
+                'n', 0, 'c', 0, 'l', 0, 'e', 0,
+                ' ', 0, 'J', 0, 'o', 0, 'e', 0,
+                ' ', 0, ' ', 0                }; // ST and Uncle Joe
 
 uint8_t   UsbDev::_SERIAL_NUMBER_STRING_DESC[] = {
                 _SERIAL_NUMBER_STRING_LEN * 2 + 4,

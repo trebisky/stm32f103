@@ -2839,6 +2839,7 @@ STM32F103XB_PERIPH( Usb,                usb,            USB_BASE          );
 STM32F103XB_PERIPH( Spi,                spi1,           SPI1_BASE         );
 STM32F103XB_PERIPH( Spi,                spi2,           SPI2_BASE         );
 
+// Used for serial number
 STM32F103XB_PERIPH( ElecSig,            elec_sig,       ELEC_SIG_BASE     );
 
 STM32F103XB_PERIPH( Flash,              flash,          FLASH_BASE        );

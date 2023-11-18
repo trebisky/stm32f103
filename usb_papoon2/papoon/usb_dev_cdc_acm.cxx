@@ -135,6 +135,7 @@ uint8_t UsbDev::_CONFIG_DESC[] = {  // not const because set total size entry
     0x00                                // bInterval
 };
 
+#ifdef notdef
 const uint8_t   UsbDevCdcAcm::_device_string_desc[] = {
                 46,
                 static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
@@ -144,6 +145,24 @@ const uint8_t   UsbDevCdcAcm::_device_string_desc[] = {
                 'l', 0, ' ', 0, 'C', 0, 'O', 0,
                 'M', 0, ' ', 0, 'P', 0, 'o', 0,
                 'r', 0, 't', 0                };     // "STM32 Virtual COM Port"
+#endif
+
+const uint8_t   UsbDevCdcAcm::_device_string_desc[] = {
+                46,
+                static_cast<uint8_t>(UsbDev::DescriptorType::STRING),
+                'U', 0, 'n', 0, 'c', 0, 'l', 0,
+                'e', 0, ' ', 0, 'J', 0, 'o', 0,
+                'e', 0, '\'', 0, 's', 0, ' ', 0,
+                's', 0, 'e', 0, 'r', 0, 'i', 0,
+                'a', 0, 'l', 0, ' ', 0, 'I', 0,
+                'O', 0, ' ', 0                };     // Uncle Joe's serial IO
+
+/* TJT - the above is pretty awful to deal with
+ * why not set up a method to move a plain old C string
+ * into a "structure" of this sort?
+ * STM32 Virtual COM Port is 22 bytes.
+ * double this (to 44), add 2 and we get the 46 value.
+ */
 
 const uint8_t   *UsbDev::_STRING_DESCS[] = {
     UsbDev      ::  language_id_string_desc(),
