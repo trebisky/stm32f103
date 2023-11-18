@@ -1,6 +1,6 @@
 /* main.c
  *
- * This is papoon2, the second cut at working with
+ * This is usb_baboon, the third cut at working with
  * the papoon C++ framework.
  *
  * (c) Tom Trebisky  9-18-2017
@@ -32,7 +32,7 @@
  */
 
 void rcc_init ( void );
-void led_init ( int );
+void led_init ( void );
 
 void led_on ( void );
 void led_off ( void );
@@ -114,7 +114,6 @@ big_delay ( void )
 }
 #endif
 
-#define PC13	13
 #define NBLINKS		2
 
 /* Turn the LED on for a pulse */
@@ -164,13 +163,14 @@ startup ( void )
 
 	serial_init ();
 	printf ( " -- Booting ------------------------------\n" );
-	printf ( "STM32 usb_papoon2 demo starting\n" );
+	printf ( "STM32 usb_baboon demo starting\n" );
 
 	mem_init ();
 
 	// usb_init ();
 
-	led_init ( PC13 );
+	led_init ();
+	led_on ();
 	led_off ();
 
 	/* This gives us a 1 us interrupt rate !  */
@@ -178,7 +178,7 @@ startup ( void )
 	/* This gives a 1 ms rate */
 	systick_init_int ( 72 * 1000 );
 
-	printf ( "STM32 usb_papoon demo\n" );
+	printf ( "STM32 usb_baboon demo\n" );
 
 #ifdef notdef
 	big_delay ();
@@ -186,17 +186,14 @@ startup ( void )
 	pma_show ();
 #endif
 
-	// papoon_main ();
-	usb_init ();
+	// usb_init ();
 
 	serial_puts ( "Main is blinking\n" );
 	led_demo ();
 
-#ifdef notdef
 	serial_puts ( "Main is spinning\n" );
 	for ( ;; )
 	    ;
-#endif
 }
 
 /* THE END */

@@ -4,7 +4,7 @@
  */
 
 void rcc_init ( void );
-void led_init ( int );
+void led_init ( void );
 
 void led_on ( void );
 void led_off ( void );
@@ -45,7 +45,8 @@ startup ( void )
 	rcc_init ();
 
 	// led_init ( PC13 );
-	led_init ( PA5 );
+	// led_init ( PA5 );
+	led_init ();
 
 	for ( ;; ) {
 	    for ( i=0; i<NBLINKS; i++ ) {

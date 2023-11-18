@@ -9,7 +9,8 @@ AS = $(TOOLS)-as
 # Use the -g flag if you intend to use gdb
 #CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -g 
 #CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
-CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -O2
+#CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb -O2
+CC = $(TOOLS)-gcc -mcpu=cortex-m3 -mthumb
 
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd

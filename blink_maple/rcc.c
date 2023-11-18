@@ -34,8 +34,10 @@ rcc_init ( void )
 {
 	struct rcc *rp = RCC_BASE;
 
-	/* Turn on GPIO C */
+	/* Turn on all the GPIO */
 	rp->ape2 |= GPIOC_ENABLE;
+	rp->ape2 |= GPIOB_ENABLE;
+	rp->ape2 |= GPIOA_ENABLE;
 
 	/* Turn on USART 1 */
 	rp->apb2 |= UART1_ENABLE;

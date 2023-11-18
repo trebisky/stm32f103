@@ -18,7 +18,7 @@ struct gpio {
 
 #define MODE_OUT_2	0x02	/* Output, 2 Mhz */
 
-#define CONF_GP_UD	0x0	/* Pull up/down */
+#define CONF_GP_PP	0x0	/* Push pull */
 #define CONF_GP_OD	0x4	/* Open drain */
 
 struct gpio *gp;
@@ -27,19 +27,32 @@ unsigned long off_mask;
 
 /* XXX - GPIO is "wired" in */
 
+#define MAPLE
+
 void
-led_init ( int bit )
+led_init ( void )
 {
 	int conf;
 	int shift;
+	int bit;
 
-	// gp = GPIOC_BASE;
+#ifdef MAPLE
+	/* A5 for Maple */
+	bit = 5;
+	shift = bit * 4;
 	gp = GPIOA_BASE;
-
+	conf = gp->cr[0] & ~(0xf<<shift);
+	conf |= (MODE_OUT_2|CONF_GP_PP) << shift;
+	gp->cr[0] = conf;
+#else
+	/* C13 for Pill */
+	bit = 13;
 	shift = (bit - 8) * 4;
+	gp = GPIOC_BASE;
 	conf = gp->cr[1] & ~(0xf<<shift);
 	conf |= (MODE_OUT_2|CONF_GP_OD) << shift;
 	gp->cr[1] = conf;
+#endif
 
 	off_mask = 1 << bit;
 	on_mask = 1 << (bit+16);

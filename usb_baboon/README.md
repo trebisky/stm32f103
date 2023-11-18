@@ -1,11 +1,9 @@
-usb_papoon
+usb_baboon    11-18-2023
 
-I wanted to try to use the C++ code from papoon_usb
+This began as a copy of usb_papoon2.
+My goals here are --
 
-https://github.com/thanks4opensource/papoon_usb
+* To run the code on a Maple board
+* To run independent of the papoon code.
 
-In particular, the first example.  This is the first real work
-I have done in 2023.  I keep the papoon C++ code in a
-directory of its own and set up my makefile to deal with
-that and make minimal changes to let me call it from my
-C framework.
+The papoon code is C++ sequestered in the papoon directory.

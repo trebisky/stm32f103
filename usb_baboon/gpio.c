@@ -2,14 +2,16 @@
  * (c) Tom Trebisky  7-2-2017
  */
 
+typedef volatile unsigned int vu32;
+
 /* One of the 3 gpios */
 struct gpio {
-	volatile unsigned long cr[2];
-	volatile unsigned long idr;
-	volatile unsigned long odr;
-	volatile unsigned long bsrr;
-	volatile unsigned long brr;
-	volatile unsigned long lock;
+	vu32 cr[2];
+	vu32 idr;
+	vu32 odr;
+	vu32 bsrr;
+	vu32 brr;
+	vu32 lock;
 };
 
 #define GPIOA_BASE	(struct gpio *) 0x40010800
@@ -43,9 +45,9 @@ struct gpio {
 #define ALT_PUSH_PULL		8
 #define ALT_ODRAIN		0xc
 
-struct gpio *led_gp;
-unsigned long on_mask;
-unsigned long off_mask;
+static struct gpio *led_gp;
+static unsigned long on_mask;
+static unsigned long off_mask;
 
 static void
 gpio_mode ( struct gpio *gp, int bit, int mode )
@@ -130,15 +132,39 @@ gpio_c_input ( int bit )
 	gpio_mode ( GPIOC_BASE, bit, INPUT_FLOAT );
 }
 
+/* On a blue pill, the LED is on PC13 */
+/* On the maple, it is on PA5 */
+/* USB disconnect on the Maple is PC12 */
+/* Maple has a button on PC9 */
+
+#define MAPLE
 
 void
-led_init ( int bit )
+led_init ( void )
 {
+#ifdef MAPLE
+	/* The Maple must drive the diode, hence push/pull */
+	int bit = 5;
+	gpio_mode ( GPIOA_BASE, bit, OUTPUT_2M | OUTPUT_PUSH_PULL );
+	led_gp = GPIOA_BASE;
+	printf ( "Maple LED selected\n" );
+#else
+	/* The Pill sinks current, so either PP or OD is OK.
+	 *  open drain is better.
+	 */
+	int bit = 13;
 	gpio_mode ( GPIOC_BASE, bit, OUTPUT_2M | OUTPUT_ODRAIN );
-
 	led_gp = GPIOC_BASE;
+	printf ( "F103-BP LED selected\n" );
+#endif
+
 	off_mask = 1 << bit;
 	on_mask = 1 << (bit+16);
+
+	// printf ( "LED gpio base%08x\n", led_gp );
+	// printf ( "LED cr0 = %08x\n", led_gp->cr[0] );
+	// printf ( "LED cr1 = %08x\n", led_gp->cr[1] );
+	// printf ( "LED odr = %08x\n", led_gp->odr );
 }
 
 void
