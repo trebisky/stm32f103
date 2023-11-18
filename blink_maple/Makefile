@@ -41,6 +41,9 @@ OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/ope
 # Some newer chips are shipping with a idcode of 0x2ba01477, this will make them work.
 #OCDCFG = -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/cs32f1x.cfg
 
+# This does not work with maple code.
+# The code loads to 08005000, but reset runs at 08000000
+# (or something more or less equivalent).
 flash:	blink.elf
 	openocd $(OCDCFG) -c "program blink.elf verify reset exit"
 

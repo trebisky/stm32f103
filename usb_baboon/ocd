@@ -1,0 +1,6 @@
+#!/bin/sh
+# These are proper file locations for Fedora 24
+# Fedora 38 changed the stlink name
+
+#openocd -f /usr/share/openocd/scripts/interface/stlink-v2.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
+openocd -f /usr/share/openocd/scripts/interface/stlink.cfg -f /usr/share/openocd/scripts/target/stm32f1x.cfg
