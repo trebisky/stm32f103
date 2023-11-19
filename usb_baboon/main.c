@@ -171,7 +171,7 @@ startup ( void )
 
 	led_init ();
 
-	// Just the USB disconnect right now
+	// Just USB stuff at this time
 	gpio_init ();
 
 	led_on ();

@@ -24,8 +24,7 @@
 
 #include <usb_dev_cdc_acm.h>
 
-#include <usb_mcu_init.h>
-
+// #include <usb_mcu_init.h>
 
 using namespace stm32f10_12357_xx;
 
@@ -47,7 +46,7 @@ papoon_init ( void )
     // nonsense
     // usb_dev.serial_number_init();
 
-    usb_mcu_init();
+    // usb_mcu_init();
 
     usb_dev.init();
 

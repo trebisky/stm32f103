@@ -6,7 +6,8 @@ TOOLS = arm-none-eabi
 #LD = $(TOOLS)-gcc
 LD = $(TOOLS)-ld.bfd --no-warn-rwx-segments
 
-OBJS = example.o usb_dev.o usb_dev_cdc_acm.o usb_mcu_init.o
+#OBJS = example.o usb_dev.o usb_dev_cdc_acm.o usb_mcu_init.o
+OBJS = example.o usb_dev.o usb_dev_cdc_acm.o
 
 all: ../papoon.o
 

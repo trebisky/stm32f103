@@ -226,6 +226,13 @@ gpio_timer ( void )
 	gpio_mode ( GPIOA_BASE, 3, OUTPUT_50M | ALT_PUSH_PULL );
 }
 
+void
+gpio_usb ( void )
+{
+	gpio_mode ( GPIOA_BASE, 11, OUTPUT_50M | ALT_ODRAIN );
+	gpio_mode ( GPIOA_BASE, 12, OUTPUT_50M | ALT_ODRAIN );
+}
+
 /* We could collect all of our GPIO initialization here
  */
 void
@@ -234,6 +241,8 @@ gpio_init ( void )
 	/* For USB disconnect */
 	gpio_c_set ( USB_BIT, 0 );
 	gpio_mode ( GPIOC_BASE, USB_BIT, OUTPUT_2M | ALT_PUSH_PULL );
+
+	gpio_usb ();
 }
 
 /* THE END */
