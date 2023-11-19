@@ -179,6 +179,20 @@ led_off ( void )
 	led_gp->bsrr = off_mask;
 }
 
+/* On a maple board, this gives a USB disconnect */
+#define USB_BIT	12
+
+/* This seems to do nothing.
+ * And the polarity makes no difference
+ */
+void
+usb_yank ( void )
+{
+	gpio_c_set ( USB_BIT, 1 );
+	delay_ms ( 50 );
+	gpio_c_set ( USB_BIT, 0 );
+}
+
 void
 gpio_uart1 ( void )
 {
@@ -210,6 +224,16 @@ gpio_timer ( void )
 	gpio_mode ( GPIOA_BASE, 1, OUTPUT_50M | ALT_PUSH_PULL );
 	gpio_mode ( GPIOA_BASE, 2, OUTPUT_50M | ALT_PUSH_PULL );
 	gpio_mode ( GPIOA_BASE, 3, OUTPUT_50M | ALT_PUSH_PULL );
+}
+
+/* We could collect all of our GPIO initialization here
+ */
+void
+gpio_init ( void )
+{
+	/* For USB disconnect */
+	gpio_c_set ( USB_BIT, 0 );
+	gpio_mode ( GPIOC_BASE, USB_BIT, OUTPUT_2M | ALT_PUSH_PULL );
 }
 
 /* THE END */

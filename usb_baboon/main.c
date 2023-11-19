@@ -170,8 +170,12 @@ startup ( void )
 	// usb_init ();
 
 	led_init ();
+
+	// Just the USB disconnect right now
+	gpio_init ();
+
 	led_on ();
-	led_off ();
+	// led_off ();
 
 	/* This gives us a 1 us interrupt rate !  */
 	// systick_init_int ( 72 );
@@ -186,7 +190,11 @@ startup ( void )
 	pma_show ();
 #endif
 
-	// usb_init ();
+	/* usb_init generally doesn't return */
+	usb_init ();
+
+	printf ( "Delay 10\n" );
+	delay_sec ( 10 );
 
 	serial_puts ( "Main is blinking\n" );
 	led_demo ();

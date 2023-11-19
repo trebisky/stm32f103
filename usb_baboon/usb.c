@@ -741,6 +741,8 @@ usb_init ( void )
 	papoon_init ();
 	hack_init ();
 
+	//usb_yank ();
+
 	// fairly useless
 	// papoon_wait ( 10 );
 
@@ -761,6 +763,11 @@ usb_init ( void )
 
 	// run enumeration detailer
 	test5 ();
+
+	//delay_sec ( 4 );
+	//printf ( "YANK\n" );
+	//usb_yank ();
+
 	// follow it with the papooon echo demo
 	test1 ();
 }

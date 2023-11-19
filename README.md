@@ -36,11 +36,19 @@ an indicator of more sophisticated and proper treatement.
 ***
 
 Some of these projects target a Maple board (or Olimexduino).
-These projects are linked to and loaded at a different address
-(0x08005000 rather than 0x08000000).  This is because these
-boards have a USB laoder in the start of flash and I don't
-want to overwrite it.  In fact I just go ahead and use it
-instead of using SWD as I do for the blue pill.
+
+I used to link these projects and loaded them to a different address.
+(0x08005000 rather than 0x08000000).
+I don't do this any more.  I build them at 0x80000000 just like all
+the other projects.
+
+I now use the STLINK for the Maple, as well as the pill.
+
+I used to use the USB loader along with dfu-util for these.
+The USB loader resided at 0x80000000, so my code had to go
+up higher (0x80005000 worked).  I burned my bridges and
+just overwrote the USB loader (but I did save a copy of
+that loader, just in case).
 
 ***
 
@@ -74,7 +82,6 @@ Here is a list of projects from 2017 ---
 9. lithium1 - lithium ion battery tester --P
 
 9. usb1 - get barely started working with USB --P
-
 
 Note that blink_maple is the only demo built to run on the Maple board.
 
