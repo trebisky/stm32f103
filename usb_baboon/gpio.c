@@ -4,6 +4,8 @@
 
 typedef volatile unsigned int vu32;
 
+static void gpio_usb_norm ( void );
+
 /* One of the 3 gpios */
 struct gpio {
 	vu32 cr[2];
@@ -182,15 +184,27 @@ led_off ( void )
 /* On a maple board, this gives a USB disconnect */
 #define USB_BIT	12
 
-/* This seems to do nothing.
- * And the polarity makes no difference
- */
 void
-usb_yank ( void )
+usb_disconnect ( void )
 {
+#ifdef notdef
+	/* This seems to do nothing.
+	 * And the polarity makes no difference
+	 */
 	gpio_c_set ( USB_BIT, 1 );
 	delay_ms ( 50 );
 	gpio_c_set ( USB_BIT, 0 );
+#endif
+
+	/* This actually works.
+	 * floating the GPIO (as during reset)
+	 * and we get a disconnect, restarting
+	 * enumeration.
+	 * The 50 ms timing is a wild guess, but works.
+	 */
+	gpio_mode ( GPIOC_BASE, USB_BIT, INPUT_FLOAT );
+	delay_ms ( 50 );
+	gpio_usb_norm ();
 }
 
 void
@@ -226,11 +240,20 @@ gpio_timer ( void )
 	gpio_mode ( GPIOA_BASE, 3, OUTPUT_50M | ALT_PUSH_PULL );
 }
 
+static void
+gpio_usb_norm ( void )
+{
+	/* For USB disconnect */
+	gpio_c_set ( USB_BIT, 0 );
+	gpio_mode ( GPIOC_BASE, USB_BIT, OUTPUT_2M | ALT_PUSH_PULL );
+}
+
 void
 gpio_usb ( void )
 {
 	gpio_mode ( GPIOA_BASE, 11, OUTPUT_50M | ALT_ODRAIN );
 	gpio_mode ( GPIOA_BASE, 12, OUTPUT_50M | ALT_ODRAIN );
+	gpio_usb_norm ();
 }
 
 /* We could collect all of our GPIO initialization here
@@ -238,10 +261,6 @@ gpio_usb ( void )
 void
 gpio_init ( void )
 {
-	/* For USB disconnect */
-	gpio_c_set ( USB_BIT, 0 );
-	gpio_mode ( GPIOC_BASE, USB_BIT, OUTPUT_2M | ALT_PUSH_PULL );
-
 	gpio_usb ();
 }
 

@@ -371,8 +371,10 @@ void UsbDev::interrupt_handler()
 {
 
     if (stm32f103xb::usb->istr.any(Usb::Istr::RESET)) {
+#ifdef notdef
 	if ( tjt_debug )
 	    printf ( "IH: usb reset\n" );
+#endif
 	tjt_enum_logger ( 2 );
         reset();
     }
@@ -529,10 +531,12 @@ void UsbDev::ctr()  // CTR_LP()
     if (eprn_ndx == 0) {  // is control endpoint
         // ctr_tx can clear spontaneously (observerved) and also
         // possibly due to setting STAT_TX/STAT_RX
+#ifdef notdef
 	if ( tjt_debug ) {
 	    printf ( "CTR - control %08x\n", istr );
 	    pma_show ();
 	}
+#endif
 
         bool    ctr_tx  = usb->EPRN<0>().any(Usb::Epr::CTR_TX),
                 ctr_stp = usb->EPRN<0>().any(Usb::Epr::SETUP ); // can change

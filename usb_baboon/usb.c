@@ -631,19 +631,32 @@ enum_log_show ( void )
 	printf ( "Total bytes saved: %d\n", s_count );
 }
 
+void
+enum_log_init ( void )
+{
+	e_count = 0;
+	s_count = 0;
+	memset ( save_buf, 0xaa, SAVE_SIZE );
+}
+
 /* This will wait forever until enumeration finishes and
  * we get configured, then it will report on the enumeration log
  */
-static void
-test5 ( void )
+void
+enum_log_watch ( void )
 {
-	s_count = 0;
-	memset ( save_buf, 0xaa, SAVE_SIZE );
+	enum_log_init ();
 
 	while ( ! is_papoon_configured () )
 	    ;
 
 	enum_log_show ();
+}
+
+static void
+test5 ( void )
+{
+	enum_log_watch ();
 }
 
 /* This is what I use to manage an endpoint pair
@@ -764,9 +777,10 @@ usb_init ( void )
 	// run enumeration detailer
 	test5 ();
 
-	//delay_sec ( 4 );
-	//printf ( "YANK\n" );
-	//usb_yank ();
+	delay_sec ( 4 );
+	printf ( "USB Disconnect\n" );
+	usb_disconnect ();
+	enum_log_watch ();
 
 	// follow it with the papooon echo demo
 	test1 ();

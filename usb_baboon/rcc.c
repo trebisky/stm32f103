@@ -202,43 +202,4 @@ rcc_usb_reset ( void )
 }
 #endif
 
-#ifdef notdef
-/* From papoon */
-
-void usb_mcu_init()
-{
-//    rcc->cr |= Rcc::Cr::HSEON;
-//    while ( !rcc->cr.any(Rcc::Cr::HSERDY) )
-//	;
-
-    rcc->cfgr |=   Rcc::Cfgr::HPRE_DIV_1
-                 | Rcc::Cfgr::PPRE2_DIV_1
-                 | Rcc::Cfgr::PPRE1_DIV_1;
-
-    rcc->cfgr.ins(  Rcc::Cfgr::PLLSRC     // PLL input from HSE (8 MHz)
-                  | Rcc::Cfgr::PLLMULL_9);// Multiply by 9 (8*9=72 MHz)
-
-    rcc->cr |= Rcc::Cr::PLLON;
-    while ( !rcc->cr.any(Rcc::Cr::PLLRDY) )
-	;
-
-    rcc->cfgr.ins(Rcc::Cfgr::SW_PLL);           // use PLL as system clock
-    while ( !rcc->cfgr.all(Rcc::Cfgr::SWS_PLL) )  // wait for confirmation
-	;
-
-    rcc->cfgr.clr(Rcc::Cfgr::USBPRE);           // 1.5x USB prescaler
-
-//     rcc->apb1enr |= Rcc::Apb1enr::USBEN;        // enable USB peripheral
-
-#ifdef USB_DEV_DMA_PMA
-//     rcc->ahbenr |= Rcc::Ahbenr::DMA1EN;
-#endif
-
-//    // enable GPIOs and alternate functions
-//    rcc->apb2enr |=   Rcc::Apb2enr::IOPAEN
-//                    | Rcc::Apb2enr::IOPCEN
-//                    | Rcc::Apb2enr::AFIOEN;
-}  // usb_mcu_init()
-#endif
-
 /* THE END */
