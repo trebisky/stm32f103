@@ -33,8 +33,14 @@ UsbDevCdcAcm    usb_dev;
 uint8_t         recv_buf[UsbDevCdcAcm::CDC_OUT_DATA_SIZE],
                 send_buf[UsbDevCdcAcm::CDC_IN_DATA_SIZE ];
 
-extern "C" void
-papoon_handler ( void )
+/* Relay routines C to C++ */
+
+extern "C" void P_reset ( void )
+{
+	usb_dev.reset(); 
+}
+
+extern "C" void P_handler ( void )
 {
 	usb_dev.interrupt_handler();
 }
@@ -49,6 +55,12 @@ papoon_init ( void )
     // usb_mcu_init();
 
     usb_dev.init();
+
+    // usb_show ();
+
+    //printf ( "  ====================\n" );
+    //printf ( "  ====================\n" );
+    //pma_show ();
 
 #ifdef USB_POLL
     printf ( "Waiting for papoon init\n" );

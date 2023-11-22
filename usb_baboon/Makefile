@@ -21,7 +21,8 @@ DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
 #OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
-OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
+#OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
+OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o usb_enum.o papoon.o
 
 all: baboon.elf baboon.dump tags
 

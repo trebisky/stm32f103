@@ -31,6 +31,8 @@
  *  Uart 3 could be on pins B10 and B11
  */
 
+#include "protos.h"
+
 void rcc_init ( void );
 void led_init ( void );
 
@@ -200,6 +202,15 @@ startup ( void )
 	led_demo ();
 
 	serial_puts ( "Main is spinning\n" );
+	for ( ;; )
+	    ;
+}
+
+/* Could blink a tell-tale pattern */
+void
+panic ( char *msg )
+{
+	printf ( "%s\n", msg );
 	for ( ;; )
 	    ;
 }

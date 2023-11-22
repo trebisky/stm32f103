@@ -2,8 +2,14 @@
  *
  * (c) Tom Trebisky  11-5-2023
  *
- * Currently this hands off most of the work
- * to papoon.
+ * This file is in 3 sections:
+ *
+ * 1 - definitions and prototypes
+ * 2 - essential driver code
+ * - - middle section with unsorted code
+ * 3 - optional debug and analysis code
+ *
+ * Currently this hands off most of the work to papoon.
  * look for baboon.cxx in the papoon directory.
  *
  * More and more is being done here by this C code.
@@ -13,18 +19,31 @@
  *  IRQ 42 -- USB wakeup from suspend via EXTI line
  */
 
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef volatile unsigned int vu32;
+#include "protos.h"
 
-#define BIT(x)	(1<<x)
+// typedef unsigned short u16;
+// typedef unsigned int u32;
+// typedef volatile unsigned int vu32;
+// #define BIT(x)	(1<<x)
 
+/* local Prototypes */
+static void memset ( char *, int, int );
 static void force_reset ( void );
+void endpoint_show ( int );
+void usb_show ( void );
+void tjt_enum_logger ( int );
+void usb_debug ( void );
+static void usb_hw_init ( void );
+static void pma_clear ( void );
+static void set_address ( int );
+static void endpoint_init ( void );
+static void pma_copy ( u32, char *, int );
+void enum_log_watch ( void );
 
 #define USB_BASE        (struct usb *) 0x40005C00
 #define USB_RAM         (u32 *) 0x40006000
 
-/* 8 endpoints are allowed */
+/* 8 endpoint "pairs"  are allowed */
 #define NUM_EP          8
 
 struct usb {
@@ -37,7 +56,12 @@ struct usb {
         vu32 btable;  /* 50 - buffer table */
 };
 
-/* Interrupt bits (shared by control and isr */
+/* Interrupt bits (shared by control and isr) */
+/* A note on clearing bits in the "isr"
+ * The datasheet says not to use read/modify/write
+ * Writing 1 is "no change"
+ * Writing 0 makes it zero.
+ */
 #define INT_CTR		BIT(15)
 #define INT_PMA		BIT(14)
 #define INT_ERR		BIT(13)
@@ -47,12 +71,20 @@ struct usb {
 #define INT_SOF		BIT(9)
 #define INT_ESOF	BIT(8)
 
+// #define INT_ALL		0xff00
+
 /* Bits in the Control Register */
 #define CTRL_RESUME	BIT(4)
 #define CTRL_FSUSP	BIT(3)
 #define CTRL_LP_MODE	BIT(2)
 #define CTRL_PDWN	BIT(1)
 #define CTRL_FRES	BIT(0)
+
+/* Daddr register */
+#define DADDR_EN	0x80
+
+/* ================================== */
+/* ================================== */
 
 /* Bits in endpoint registers */
 #define EP_CTR_RX	BIT(15)
@@ -67,12 +99,15 @@ struct usb {
 #define EP_RX_NAK		2<<12
 #define EP_RX_VALID		3<<12
 
+/* change NAK to VALID via toggle */
+#define EP_RX_NAK_VALID		1<<12
+
 #define EP_SETUP	BIT(11)
 
 #define EP_TYPE_BULK		0
 #define EP_TYPE_CONTROL		1<<9
 #define EP_TYPE_ISO		2<<9
-#define EP_TYPE_INT		3<<9
+#define EP_TYPE_INTERRUPT	3<<9
 
 /* Depends on Type (modifies type) */
 #define EP_KIND		BIT(8)
@@ -91,11 +126,206 @@ struct usb {
 
 #define EP_ADDR		0xf	// 4 bits
 
+/* 4 * 4 bytes = 16 bytes in ARM addr space.
+ */
+struct btable_entry {
+	u32	tx_addr;
+	u32	tx_count;
+	u32	rx_addr;
+	u32	rx_count;
+};
+
+
 /* =================================== */
 
 #define USB_HP_IRQ	19
 #define USB_LP_IRQ	20
 #define USB_WK_IRQ	42
+
+/* ====================================================== */
+/* ====================================================== */
+/* section 2 - essential driver code */
+/* ====================================================== */
+
+void
+usb_init ( void )
+{
+	usb_hw_init ();
+
+	usb_debug ();
+}
+
+static void
+usb_hw_init ( void )
+{
+        struct usb *up = USB_BASE;
+
+	// No interrupts
+	up->ctrl = 0;
+
+	/* We only ever see LP interrupts */
+	nvic_enable ( USB_HP_IRQ );
+	nvic_enable ( USB_LP_IRQ );
+	nvic_enable ( USB_WK_IRQ );
+
+	pma_clear ();
+
+	endpoint_init ();
+
+	set_address ( 0 );
+
+	/* Clear all interrupts */
+	// up->isr = INT_ALL;
+	up->isr = 0;
+
+	printf ( "TJT usb init done\n" );
+	printf ( "  ===============\n" );
+	printf ( "  ===============\n" );
+	printf ( "TJT enable ints\n" );
+
+	/* Enable just these two */
+	up->ctrl = INT_CTR | INT_RESET;
+}
+
+/* XXX - could be inline or macro or
+ * just placed inline by hand
+ */
+static void
+set_address ( int addr )
+{
+        struct usb *up = USB_BASE;
+
+	printf ( "USB address %d set (tjt)\n", addr );
+
+	/* also set stuff in endpoint regs ??
+	 * XXX see above, why?
+	 */
+
+	up->daddr = DADDR_EN | (addr & 0x7f);
+}
+
+/* We have 8 endpoint registers.
+ * Each handles what I call an "endpoint pair" or what
+ * the documentation calls a "bidirectional endpoint".
+ *
+ * Then we have the BTABLE, which can be located anywhere
+ * in PMA ram, as specified by the btable register.
+ *
+ * Note that BTABLE entries correspond to endpoint registers,
+ * not to endpoint index numbers.  For example endpoint
+ * register 1 could be set up with the EA field set to 4.
+ * This would be endpoint 4, and btable entry 1 would
+ * correspond to endoint 4 (via endpoint register 1).
+ *
+ * Defintely a source of possible confusion.
+ *
+ * There is more special weirdness
+ * Documentation discourages read-modify-write access
+ * to these registers and such will give unexpected
+ * results.
+ *
+ * certain bits are type "t" (toggle), meaning if you
+ * write 0 to them, nothing happens.  If you write 1,
+ * they change state..  DTOG and STAT bits are like this.
+ * The CTR bits are type "rc_w0" meaning that you can
+ * read them, but can only write 0 (to clear them).
+ *
+ * In operation, the status bits change between VALID
+ * and NAK, so to make status valid again, you don't
+ * write 11 as you might think, but you write 01,
+ * which changed 10 (nak) to 11 (valid).
+ *
+ * Sort of crazy, but I didn't design this thing.
+ *
+ * PMA ram is 512 bytes, but it uses 1024 bytes of ARM address space.
+ * The values we write into it are for the USB controller,
+ * which lives in the 16 bit world, so it sees 512 bytes
+ * at addresses from 0x000 to 0x1ff.
+ * Here is the layout:
+ *
+ * 000 to 01f - btable is here, 4 entries, 8 bytes each
+ * 020 to 0f7 - unused.
+ * 
+ * 0f8 to 137 - 64 bytes, endpoint 1 tx serial data out
+ * 138 to 177 - 64 bytes, endpoint 3 Rx serial data in
+ * 178 to 17f - 8 bytes, endpoint 2 Tx (ACM)
+ * 180 to 1bf - 64 bytes, endpoint 0 Rx
+ * 1c0 to 1ff - 64 bytes, endpoint 0 Tx
+ *
+ * Would I do things this way?  No.
+ * I would stick the ACM thing at the start (or get rid of it entirely).
+ * I would put serial in/out in the same endpoint number.
+ */
+
+/* For the Rx count field in the btable, we leave the 10 low bits
+ * for hardware to save the count.  We put the actual buffer size
+ * into the upper 6 bits as follows.
+ * The high bit (BT_CLICK) declares whether we are using
+ * units of 2 bytes or 32 bytes.
+ * The next 5 bits give the number of clicks -- MINUS 1.
+ * So, 8400 for our 64 byte buffers.  The minus 1 is sneaky.
+ */
+
+#define BT_CLICK_32	0x8000		// 0 = 2 byte units, 1 = 32 byte units
+
+// This yields 0x8400 for 64 byte buffers
+#define BT_64		(BT_CLICK_32 | 1<<10)
+
+static void
+endpoint_init ( void )
+{
+        struct usb *up = USB_BASE;
+	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
+        struct btable_entry *bte;
+	int i;
+
+	for ( i=0; i<NUM_EP; i++ )
+	    up->epr[i] = 0;
+
+	/* This is how papoon does things,
+	 * and I will stick with it for now.
+	 */
+	up->epr[0] = EP_TYPE_CONTROL | 0;
+	up->epr[1] = EP_TYPE_INTERRUPT | 2;  // ?? for ACM
+	up->epr[2] = EP_TYPE_BULK | 3;
+	up->epr[3] = EP_TYPE_BULK | 1;
+
+	// Endpoint 0
+	bte = &bt[0];
+	bte->tx_addr = 0x180;
+	// bte->tx_count = 64;
+	bte->tx_count = 0;
+	bte->rx_addr = 0x1c0;
+	bte->rx_count = BT_64;
+
+	// I never see traffic here, but it is
+	// apparently "required" for an ACM device.
+	// Endpoint 2 - ACM control (8 bytes)
+	bte = &bt[1];
+	bte->tx_addr = 0x178;
+	bte->tx_count = 0;
+
+	// Endpoint 3 - serial data in
+	bte = &bt[2];
+	bte->tx_addr = 0;
+	bte->tx_count = 0;;
+	bte->rx_addr = 0x138;
+	bte->rx_count = BT_64;
+
+	// Endpoint 1 - serial data out
+	bte = &bt[3];
+	bte->tx_addr = 0x0f8;
+	bte->tx_count = 0;
+
+	up->btable = 0;
+
+	// We don't set EP_KIND
+	// This will work to transition from 00 (disable) to 10 (NAK)
+	up->epr[0] = EP_RX_NAK | EP_TX_NAK;
+
+	/* Toggle NAK to VALID */
+	up->epr[0] = EP_RX_NAK_VALID;
+}
 
 static void
 unexpected ( void )
@@ -133,7 +363,6 @@ usb_wk_handler ( void )
 	unexpected ();
 }
 
-
 /* Having debug printout during enumeration
  * caused the enumeration to fail.
  * The debug switch was introduced with the
@@ -146,7 +375,30 @@ usb_wk_handler ( void )
  *  but being fully aware that enumeration
  *  will fail.
  */
-static int debug = 0;
+
+/* The idea here is to capture enumeration activity
+ * for later analysis without disturbing anything.
+ * (i.e. a passive watcher)
+ */
+void
+interrupt_debug ( void )
+{
+        struct usb *up = USB_BASE;
+	int ep;
+
+	if ( up->isr & INT_RESET )
+	    tjt_enum_logger ( 2 );
+
+	if ( up->isr & INT_CTR ) {
+	    ep = up->isr & 0xf;
+	    if ( ep == 0 ) {
+		if ( up->epr[0] & EP_CTR_RX )
+		    tjt_enum_logger ( 0 );
+		if ( up->epr[0] & EP_CTR_TX )
+		    tjt_enum_logger ( 1 );
+	    }
+	}
+}
 
 static int lp_count = 0;
 
@@ -156,15 +408,73 @@ static int lp_count = 0;
  */
 static int sof_count = 0;
 
+#define SETUP_BUF	10
+
+#ifdef notyet
+static int
+ctr0 ( void )
+{
+        struct usb *up = USB_BASE;
+	struct btable_entry *bte;
+	char buf[SETUP_BUF];
+	int count;
+
+	bte = & ((struct btable_entry *) USB_RAM) [0];
+
+	if ( up->epr[0] & EP_CTR_RX ) {
+	    count = bte->rx_count & 0x3ff;
+	    if ( count > SETUP_BUF )
+		panic ( "setup count" );
+
+	    pma_copy ( bte->rx_addr, buf, count );
+
+	    if ( up->epr[0] & EP_SETUP )
+		usb_setup ( buf, count );
+	    else
+		usb_control ( buf, count );
+	}
+
+	if ( up->epr[0] & EP_CTR_TX ) {
+	    usb_control_tx ();
+	}
+
+	return 0;
+}
+#endif
+
+static int
+ctr0 ( void )
+{
+	return 0;
+}
+
 void
 usb_lp_handler ( void )
 {
         struct usb *up = USB_BASE;
+	int ep;
+	int stat;
 
-	if ( debug )
-	    printf ( "USB lp interrupt %d\n", ++lp_count );
+	interrupt_debug ();
+
+	/* for now, relay to papoon */
+	if ( up->isr & INT_RESET ) {
+	    P_reset ();
+	    up->isr &= ~INT_RESET;
+	}
+
+	if ( up->isr & INT_CTR ) {
+	    ep = up->isr & 0xf;
+	    stat = 0;
+	    if ( ep == 0 ) {
+		stat = ctr0 ();
+	    }
+	    if ( stat )
+		up->isr &= ~INT_CTR;
+	}
 
 	/* We see 913 SOF per second.
+	 * (actually, 1000 when we get our timer just right)
 	 * This confirms that we can clear the INT_SOF bit in the isr
 	 * We also gate off the interrupt by clearing the bit in CTR.
 	 */
@@ -180,7 +490,8 @@ usb_lp_handler ( void )
 	    // printf ( "SOF int\n" );
 
 	    // everything but INT_SOF
-	    up->isr = INT_CTR | INT_RESET;
+	    // up->isr = INT_CTR | INT_RESET;
+	    up->isr = ~INT_SOF;
 
 	    /*
 	    if ( sof_count > 5000 )
@@ -188,37 +499,10 @@ usb_lp_handler ( void )
 	    */
 
 	    sof_count++;
+	    return;
 	}
 
-#ifdef notdef
-	/* It turns out the "force reset" bit thing is more or less useless
-	 * and not what we want to do.  More on this later.
-	 */
-	if ( up->isr & CTRL_RESETM ) {
-	    printf ( "USB isr before reset: %04x\n", up->isr );
-	    force_reset ();
-	    /* The datasheet recommends clearning in this fashion.
-	     * The datasheet labels the interrupt bits as rc_w0
-	     * This means the bit can be read,
-	     * Writing 0 clears it, Writing 1 does nothing.
-	     */
-	    up->isr = CTRL_CTRM;
-	    printf ( "USB isr after reset: %04x\n", up->isr );
-	}
-#endif
-
-	papoon_handler ();
-}
-
-/* Quick and dirty */
-static void
-memset ( char *buf, int val, int count )
-{
-	char *p = buf;
-	int i;
-
-	for ( i=0; i<count; i++ )
-	    *p++ = val;
+	P_handler ();
 }
 
 /* PMA (packet memory array) is 512 bytes of SRAM
@@ -235,8 +519,7 @@ memset ( char *buf, int val, int count )
  * would need to do something like have two of them be
  * of size 32.
  */
-
-void
+static void
 pma_clear ( void )
 {
 	u32 *p;
@@ -254,89 +537,6 @@ pma_clear ( void )
 	p[255] = 0xdeadbeef;
 }
 
-void
-pma_show ( void )
-{
-        int i, j;
-        u32 *p;
-        u16 *addr;
-        struct usb *up = USB_BASE;
-
-        printf ( "BTABLE = %08x\n", up->btable );
-        printf ( "CTRL  = %08x\n", up->ctrl );
-        printf ( "ISR   = %08x\n", up->isr );
-        printf ( "EPR-0 = %08x\n", up->epr[0] );
-        printf ( "EPR-1 = %08x\n", up->epr[1] );
-
-        p = USB_RAM;
-        addr = (short *) 0;
-
-        for ( i=0; i<32; i++ ) {
-            printf ( "PMA %08x: ", addr );
-            for ( j=0; j<8; j++ ) {
-                printf ( "%04x ", *p++ );
-                addr++;
-            }
-            printf ( "\n" );
-        }
-}
-
-/* 4 * 4 bytes = 16, we have 4 of these
- */
-struct btable_entry {
-	u32	tx_addr;
-	u32	tx_count;
-	u32	rx_addr;
-	u32	rx_count;
-};
-
-/* Display stuff for a specific endpoint pair
- */
-void
-endpoint_show ( int ep )
-{
-	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
-	struct btable_entry *bte;
-        struct usb *up = USB_BASE;
-	char *buf;
-
-
-	printf ( "EPR %d = %04x\n", ep, up->epr[ep] );
-
-	if ( ep < 4 ) {
-	    bte = &bt[ep];
-	    printf ( "BTE ep-%d @ %08x\n", ep, bte );
-	    buf = (char *) USB_RAM + 2 * bte->tx_addr;
-	    printf ( "BTE, ep-%d tx addr  = %04x - %08x\n", ep, bte->tx_addr, buf );
-	    printf ( "BTE, ep-%d tx count = %04x\n", ep, bte->tx_count );
-
-	    buf = (char *) USB_RAM + 2 * bte->rx_addr;
-	    printf ( "BTE, ep-%d rx addr  = %04x - %08x\n", ep, bte->rx_addr, buf );
-	    printf ( "BTE, ep-%d rx count = %04x\n", ep, bte->rx_count );
-	}
-}
-
-void
-btable_show ( void )
-{
-        struct usb *up = USB_BASE;
-	int ep;
-
-	if ( up->btable ) {
-	    printf ( "BTABLE = %08x\n", up->btable );
-	    printf ( "Btable non-zero, giving up\n" );
-	    return;
-	}
-
-	for ( ep=0; ep<8; ep++ ) {
-	    endpoint_show ( ep );
-	}
-}
-
-#define CNTR_CTRM	BIT(15)
-#define CNTR_RESETM	BIT(10)
-#define CNTR_FRES	BIT(0)
-
 #ifdef notdef
 /* Not useful */
 static void
@@ -352,6 +552,25 @@ force_reset ( void )
 	up->ctrl = CTRL_CTRM | CTRL_RESETM;
 }
 #endif
+
+
+/* Quick and dirty.
+ * could be in a library somewhere, but it isn't
+ */
+static void
+memset ( char *buf, int val, int count )
+{
+	char *p = buf;
+	int i;
+
+	for ( i=0; i<count; i++ )
+	    *p++ = val;
+}
+
+/* ====================================================== */
+/* ====================================================== */
+/* section XXX - odds and ends */
+/* ====================================================== */
 
 static int
 strlen ( char *x )
@@ -397,6 +616,123 @@ usb_puts ( char *msg )
 /* Papoon code (that will go away someday?)
  * mostly below here.
  */
+
+/* This is what I use to manage an endpoint pair
+ */
+struct endpoint {
+	struct btable_entry *btable;
+	u32 *tx_buf;
+	u32 *rx_buf;
+	int busy;
+};
+
+struct endpoint endpoint_info[4];
+
+/* I only use endpoint 0 (for control stuff)
+ * and endpoint 1 (for the ACM)
+ */
+static void
+endpoint_info_init ( void )
+{
+	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
+	struct btable_entry *bte;
+	struct endpoint *epp;
+
+	/* We are just picking up the setup done by papoon
+	 */
+
+	epp = &endpoint_info[0];
+	bte = &bt[0];
+	epp->btable = bte;
+	epp->tx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->tx_addr);
+	epp->rx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->rx_addr);
+
+	epp = &endpoint_info[1];
+	bte = &bt[1];
+	epp->btable = bte;
+	epp->tx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->tx_addr);
+	epp->rx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->rx_addr);
+}
+
+/* Send a single character on endpoint 1 */
+void
+tom_putc ( int cc )
+{
+	struct endpoint *epp = &endpoint_info[1];
+        struct usb *up = USB_BASE;
+
+	// XXX spin on busy
+
+	*(epp->tx_buf) = 0x3132;	// "12"
+	epp->btable->tx_count = 2;
+	epp->busy = 1;
+
+	// up->epr[2] = xxx;
+}
+
+/* ====================================================== */
+/* ====================================================== */
+/* section 3 - analysis and debug code */
+/* ====================================================== */
+
+static void test1 ( void );
+
+/*
+ * Starting this up is a bit problematic.
+ * 1 - if we just reboot the code with the USB cable
+ *   plugged in, the linux system doesn't know anything
+ *   happened, so doesn't start enumeration.
+ *   So papoon_init() just times out.
+ * 2 - if we boot it up, let the above time out,
+ *   then unplug and replug the cable, we do get
+ *   the linux system trying to enumerate, but we
+ *   are running in papoon_demo() and our debug
+ *   kills the enumeration.
+ */
+void
+usb_debug ( void )
+{
+	// usb_show ();
+
+	// papoon_debug ();
+
+	papoon_init ();
+
+	//printf ( "USB spins\n" );
+	//for ( ;; ) ;
+
+	//usb_yank ();
+
+	// fairly useless
+	// papoon_wait ( 10 );
+
+	// btable_show ();
+	// pma_show ();
+
+	// papoon_debug ();
+
+	// run echo demo
+	// test1 ();
+
+	// test2 ();
+	// test3 ();
+	// test4 ();
+
+	// papoon_debug ();
+
+	// run enumeration detailer
+	enum_log_watch ();
+
+#ifdef notdef
+	delay_sec ( 4 );
+	printf ( "USB Disconnect\n" );
+	usb_disconnect ();
+	enum_log_watch ();
+#endif
+
+	// follow it with the papooon echo demo
+	test1 ();
+}
 
 /* This is the original test that came with papoon.
  * It echos characters on the ACM serial port.
@@ -483,6 +819,103 @@ test4 ( void )
 	}
 }
 
+
+/* Display stuff for a specific endpoint pair
+ */
+void
+endpoint_show ( int ep )
+{
+	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
+	struct btable_entry *bte;
+        struct usb *up = USB_BASE;
+	char *buf;
+
+	printf ( "EPR %d = %04x\n", ep, up->epr[ep] );
+
+	if ( ep < 4 ) {
+	    bte = &bt[ep];
+	    printf ( "BTE ep-%d @ %08x\n", ep, bte );
+	    buf = (char *) USB_RAM + 2 * bte->tx_addr;
+	    printf ( "BTE, ep-%d tx addr  = %04x - %08x\n", ep, bte->tx_addr, buf );
+	    printf ( "BTE, ep-%d tx count = %04x\n", ep, bte->tx_count );
+
+	    buf = (char *) USB_RAM + 2 * bte->rx_addr;
+	    printf ( "BTE, ep-%d rx addr  = %04x - %08x\n", ep, bte->rx_addr, buf );
+	    printf ( "BTE, ep-%d rx count = %04x\n", ep, bte->rx_count );
+	}
+}
+
+/* Display entire btable and all endpoints
+ */
+void
+btable_show ( void )
+{
+        struct usb *up = USB_BASE;
+	int ep;
+
+	if ( up->btable ) {
+	    printf ( "BTABLE = %08x\n", up->btable );
+	    printf ( "Btable non-zero, giving up\n" );
+	    return;
+	}
+
+	for ( ep=0; ep<8; ep++ ) {
+	    endpoint_show ( ep );
+	}
+}
+
+void
+usb_show ( void )
+{
+        struct usb *up = USB_BASE;
+
+        printf ( "BTABLE = %08x\n", up->btable );
+        printf ( "CTRL  = %08x\n", up->ctrl );
+        printf ( "ISR   = %08x\n", up->isr );
+        printf ( "EPR-0 = %08x\n", up->epr[0] );
+        printf ( "EPR-1 = %08x\n", up->epr[1] );
+
+	btable_show ();
+}
+
+/* Dump the above AND the entire PMA area.
+ */
+void
+pma_show ( void )
+{
+        int i, j;
+        u32 *p;
+        u16 *addr;
+        // struct usb *up = USB_BASE;
+
+	usb_show ();
+
+        p = USB_RAM;
+        addr = (short *) 0;
+
+        for ( i=0; i<32; i++ ) {
+            printf ( "PMA %08x: ", addr );
+            for ( j=0; j<8; j++ ) {
+                printf ( "%04x ", *p++ );
+                addr++;
+            }
+            printf ( "\n" );
+        }
+}
+
+/* ***************************************** */
+/* ***************************************** */
+/* Enumeration logging facility */
+/* ***************************************** */
+
+static char * enum_saver ( u32, int );
+void print_buf ( char *, int );
+
+/* Called from papoon on CTR interrupts on
+ * endpoint 0
+ * what = 0 is Rx, 1 is Tx
+ */
+
 struct enum_log_e {
 	int what;
 	int count;
@@ -496,65 +929,12 @@ struct enum_log_e {
 static struct enum_log_e e_log[50];
 static int e_count = 0;
 
-/* We see 287 bytes */
+/* We see 363 bytes */
 #define SAVE_SIZE	400
 
 static char save_buf[SAVE_SIZE];
 static int s_count = 0;
 
-/* Copy from PMA memory to buffer */
-static void
-pma_copy ( u32 pma_off, char *buf, int count )
-{
-	int i;
-	int num = (count + 1) / 2;
-	u16 *bp = (u16 *) buf;
-	u32 *pp;
-	u32 addr;
-
-	addr = (u32) USB_RAM;
-	addr += 2 * pma_off;
-	pp = (u32 *) addr;
-
-	for ( i=0; i<num; i++ )
-	    *bp++ = *pp++;
-}
-
-static char *
-enum_saver ( u32 addr, int count )
-{
-	char *rv;
-	count &= 0x3ff;
-
-	if ( count == 0 )
-	    return (char *) 0;
-
-	rv = &save_buf[s_count];
-	pma_copy ( addr, rv, count );
-
-	s_count += count;
-	return rv;
-}
-
-static void
-print_buf ( char *data, int count )
-{
-	int i;
-
-	if ( count ) {
-	    printf ( " " );
-	    for ( i=0; i<count; i++ )
-		printf ( "%02x", *data++ );
-	}
-
-	printf ( "\n" );
-}
-
-/* ***************************************** */
-/* Called from papoon on CTR interrupts on
- * endpoint 0
- * what = 0 is Rx, 1 is Tx
- */
 void
 tjt_enum_logger ( int what )
 {
@@ -566,8 +946,10 @@ tjt_enum_logger ( int what )
         struct usb *up = USB_BASE;
 	u32 addr = (u32) USB_RAM;
 
+#ifdef notdef
 	if ( first && what != 2 )
 	    pma_show ();
+#endif
 
 	bte = &bt[0];
 
@@ -652,138 +1034,52 @@ enum_log_watch ( void )
 
 	enum_log_show ();
 }
-
+/* Copy from PMA memory to buffer */
 static void
-test5 ( void )
+pma_copy ( u32 pma_off, char *buf, int count )
 {
-	enum_log_watch ();
+	int i;
+	int num = (count + 1) / 2;
+	u16 *bp = (u16 *) buf;
+	u32 *pp;
+	u32 addr;
+
+	addr = (u32) USB_RAM;
+	addr += 2 * pma_off;
+	pp = (u32 *) addr;
+
+	for ( i=0; i<num; i++ )
+	    *bp++ = *pp++;
 }
 
-/* This is what I use to manage an endpoint pair
- */
-struct endpoint {
-	struct btable_entry *btable;
-	u32 *tx_buf;
-	u32 *rx_buf;
-	int busy;
-};
-
-struct endpoint endpoint_info[4];
-
-/* I only use endpoint 0 (for control stuff)
- * and endpoint 1 (for the ACM)
- */
-static void
-endpoint_init ( void )
+static char *
+enum_saver ( u32 addr, int count )
 {
-	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
-	struct btable_entry *bte;
-	struct endpoint *epp;
+	char *rv;
+	count &= 0x3ff;
 
-	/* We are just picking up the setup done by papoon
-	 */
+	if ( count == 0 )
+	    return (char *) 0;
 
-	epp = &endpoint_info[0];
-	bte = &bt[0];
-	epp->btable = bte;
-	epp->tx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->tx_addr);
-	epp->rx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->rx_addr);
+	rv = &save_buf[s_count];
+	pma_copy ( addr, rv, count );
 
-	epp = &endpoint_info[1];
-	bte = &bt[1];
-	epp->btable = bte;
-	epp->tx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->tx_addr);
-	epp->rx_buf = (u32 *) ((char *) USB_RAM + 2 * bte->rx_addr);
+	s_count += count;
+	return rv;
 }
 
-/* Send a single character on endpoint 1 */
 void
-tom_putc ( int cc )
+print_buf ( char *data, int count )
 {
-	struct endpoint *epp = &endpoint_info[1];
-        struct usb *up = USB_BASE;
+	int i;
 
-	// XXX spin on busy
+	if ( count ) {
+	    printf ( " " );
+	    for ( i=0; i<count; i++ )
+		printf ( "%02x", *data++ );
+	}
 
-	*(epp->tx_buf) = 0x3132;	// "12"
-	epp->btable->tx_count = 2;
-	epp->busy = 1;
-
-	// up->epr[2] = xxx;
-}
-
-/* After papoon_init() we have a chance to
- * fool around.  This may grow into our
- * own usb_init()
- */
-void
-hack_init ( void )
-{
-        struct usb *up = USB_BASE;
-	u32 val;
-
-	// up->ctrl |= INT_SOF;
-}
-
-/*
- *
- * Starting this up is a bit problematic.
- * 1 - if we just reboot the code with the USB cable
- *   plugged in, the linux system doesn't know anything
- *   happened, so doesn't start enumeration.
- *   So papoon_init() just times out.
- * 2 - if we boot it up, let the above time out,
- *   then unplug and replug the cable, we do get
- *   the linux system trying to enumerate, but we
- *   are running in papoon_demo() and our debug
- *   kills the enumeration.
- */
-void
-usb_init ( void )
-{
-	/* Probably only need HP */
-	nvic_enable ( USB_HP_IRQ );
-	nvic_enable ( USB_LP_IRQ );
-	nvic_enable ( USB_WK_IRQ );
-
-	pma_clear ();
-
-	// debug = 1;
-	// papoon_debug ();
-
-	papoon_init ();
-	hack_init ();
-
-	//usb_yank ();
-
-	// fairly useless
-	// papoon_wait ( 10 );
-
-	// btable_show ();
-	// pma_show ();
-
-	// debug = 1;
-	// papoon_debug ();
-
-	// run echo demo
-	// test1 ();
-
-	// test2 ();
-	// test3 ();
-	// test4 ();
-
-	// papoon_debug ();
-
-	// run enumeration detailer
-	test5 ();
-
-	delay_sec ( 4 );
-	printf ( "USB Disconnect\n" );
-	usb_disconnect ();
-	enum_log_watch ();
-
-	// follow it with the papooon echo demo
-	test1 ();
+	printf ( "\n" );
 }
 
 /* THE END */

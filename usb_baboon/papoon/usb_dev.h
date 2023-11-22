@@ -162,6 +162,8 @@ class UsbDev {
     DeviceState     device_state() const { return _device_state ; }
 
     void interrupt_handler();
+    /* tjt moves here */
+    void reset ();
 
 
     // STM32F10xx/UsbDev endpoint semantics allow endpoint N to be
@@ -602,8 +604,8 @@ class UsbDev {
                             _SERIAL_NUMBER_STRING_DESC[];  // ... all bytes
     static const uint8_t*   _STRING_DESCS[];
 
-    void    reset(),
-            ctr  ();
+    // void    reset ();
+    void    ctr ();
 
     void    setup          (),
             control_out    (),

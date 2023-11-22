@@ -28,8 +28,6 @@ namespace stm32f10_12357_xx {
 
 using namespace stm32f103xb;
 
-
-
 // public
 
 /* Papoon produces this gigantic serial number:
@@ -42,12 +40,11 @@ using namespace stm32f103xb;
  * the length is wired in as 24 (see usb_dev.h)
  * I changed the length  to 4 and the value to "1313".
  */
+
+#ifdef notdef
 //#include <bin_to_hex.h>
-
-
 void UsbDev::serial_number_init()  // do before mcu_init() clock speed breaks
 {
-#ifdef notdef
     char    serial_number[_SERIAL_NUMBER_STRING_LEN];
 
     /* 4 + 4 * 2 + 2 = 12 16 bit items */
@@ -60,8 +57,8 @@ void UsbDev::serial_number_init()  // do before mcu_init() clock speed breaks
         // little-endian uint16_t
           reinterpret_cast<uint16_t*>(&_SERIAL_NUMBER_STRING_DESC[2])[ndx]
         = serial_number[ndx];
-#endif
 }
+#endif
 
 bool UsbDev::init()
 {
@@ -244,6 +241,8 @@ bool UsbDev::init()
         desc_data += *desc_data;
     }
 
+#ifdef notdef
+// TJT - hardware initialization now done in C code
 
     // clear any pending interrupts (particularly reset)
     usb->istr.clr(  Usb::Istr::PMAOVR
@@ -256,12 +255,14 @@ bool UsbDev::init()
 
     // enable notification flags (and interrupts if USB_DEV_INTERRUPT_DRIVEN)
     usb->cntr = Usb::Cntr ::CTRM | Usb::Cntr::RESETM;
+#endif
 
     // listen for configuration requests on default pipe 0
     set_address(0);
 
     _device_state = DeviceState::INITIALIZED;
-    printf ( "Device is now initialized\n" );
+
+    printf ( "Device (usb_dev) is now initialized\n" );
 
     return success;   // false if aborted endpoint search/parsing/initialization
 
@@ -370,14 +371,14 @@ const uint16_t          data_length)  // trust caller <= max_send_packet
 void UsbDev::interrupt_handler()
 {
 
-    if (stm32f103xb::usb->istr.any(Usb::Istr::RESET)) {
 #ifdef notdef
+    if (stm32f103xb::usb->istr.any(Usb::Istr::RESET)) {
 	if ( tjt_debug )
 	    printf ( "IH: usb reset\n" );
-#endif
-	tjt_enum_logger ( 2 );
+	// tjt_enum_logger ( 2 );
         reset();
     }
+#endif
 
     while (stm32f103xb::usb->istr.any(Usb::Istr::CTR)) {
 	// printf ( "IH: usb ctr\n" );
@@ -551,7 +552,7 @@ void UsbDev::ctr()  // CTR_LP()
         // have EPRN<0> CTR_TX in addition to CTR_RX, as happens normally
         // when ISTR DIR flag is clear
         if (usb->EPRN<0>().any(Usb::Epr::CTR_RX)) {
-	    tjt_enum_logger ( 0 );
+	    // tjt_enum_logger ( 0 );
             usb->EPRN<0>().clear(Usb::Epr::CTR_RX);
             if (ctr_stp /*usb->EPRN<0>().any(Usb::Epr::SETUP*/)
                 setup();
@@ -563,7 +564,7 @@ void UsbDev::ctr()  // CTR_LP()
         // in setup() and/or control_out(), and also might have been
         // set by hardware during their execution
         if (ctr_tx || usb->EPRN<0>().any(Usb::Epr::CTR_TX)) {
-	    tjt_enum_logger ( 1 );
+	    // tjt_enum_logger ( 1 );
             usb->EPRN<0>().clear(Usb::Epr::CTR_TX);
             control_in();
         }
@@ -960,7 +961,7 @@ const uint8_t   address)
     usb->daddr = Usb::Daddr::add(address) | Usb::Daddr::EF;
 
     _device_state = DeviceState::ADDRESSED;
-    printf ( "Device is now addressed\n" );
+    printf ( "Device is now addressed (papoon) to %d\n", address );
 
 }  // set_address()
 
