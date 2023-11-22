@@ -21,6 +21,10 @@
 
 #include "protos.h"
 
+// set to 0 to let papoon handle CTR
+// int my_ctr = 1;
+int my_ctr = 0;
+
 // typedef unsigned short u16;
 // typedef unsigned int u32;
 // typedef volatile unsigned int vu32;
@@ -37,7 +41,8 @@ static void usb_hw_init ( void );
 static void pma_clear ( void );
 static void set_address ( int );
 static void endpoint_init ( void );
-static void pma_copy ( u32, char *, int );
+static void pma_copy_in ( u32, char *, int );
+static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
 
 #define USB_BASE        (struct usb *) 0x40005C00
@@ -94,6 +99,9 @@ struct usb {
 /* These bits toggle when a 1 is written
  * Writing 0 does nothing
  */
+
+#define EP_STAT_RX_SHIFT	12
+#define EP_STAT_RX		3<<12
 #define EP_RX_DIS		0
 #define EP_RX_STALL		1<<12
 #define EP_RX_NAK		2<<12
@@ -119,6 +127,8 @@ struct usb {
 /* These bits toggle when a 1 is written
  * Writing 0 does nothing
  */
+#define EP_STAT_TX_SHIFT	4
+#define EP_STAT_TX		3<<4
 #define EP_TX_DIS		0
 #define EP_TX_STALL		1<<4
 #define EP_TX_NAK		2<<4
@@ -134,7 +144,6 @@ struct btable_entry {
 	u32	rx_addr;
 	u32	rx_count;
 };
-
 
 /* =================================== */
 
@@ -402,15 +411,16 @@ interrupt_debug ( void )
 
 static int lp_count = 0;
 
+#ifdef SOF_DEBUG
 /* As soon as we plug the cable in, we start getting
  * lots of SOF interrupts, before and during and
  * after enumeration.  The host causes this.
  */
 static int sof_count = 0;
+#endif
 
 #define SETUP_BUF	10
 
-#ifdef notyet
 static int
 ctr0 ( void )
 {
@@ -419,31 +429,33 @@ ctr0 ( void )
 	char buf[SETUP_BUF];
 	int count;
 
-	bte = & ((struct btable_entry *) USB_RAM) [0];
+	// No interrupts
+	// up->ctrl = 0;
 
 	if ( up->epr[0] & EP_CTR_RX ) {
-	    count = bte->rx_count & 0x3ff;
-	    if ( count > SETUP_BUF )
+
+	    /* do we really need this check ? */
+	    bte = & ((struct btable_entry *) USB_RAM) [0];
+	    if ( bte->rx_count & 0x3ff > SETUP_BUF )
 		panic ( "setup count" );
 
-	    pma_copy ( bte->rx_addr, buf, count );
+	    count = endpoint_recv ( 0, buf );
 
 	    if ( up->epr[0] & EP_SETUP )
-		usb_setup ( buf, count );
+		return usb_setup ( buf, count );
 	    else
-		usb_control ( buf, count );
+		return usb_control ( buf, count );
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
-	    usb_control_tx ();
+	    return usb_control_tx ();
 	}
 
 	return 0;
 }
-#endif
 
 static int
-ctr0 ( void )
+dummy_ctr0 ( void )
 {
 	return 0;
 }
@@ -467,12 +479,16 @@ usb_lp_handler ( void )
 	    ep = up->isr & 0xf;
 	    stat = 0;
 	    if ( ep == 0 ) {
-		stat = ctr0 ();
+		if ( my_ctr )
+		    stat = ctr0 ();
+		else
+		    stat = dummy_ctr0 ();
 	    }
 	    if ( stat )
 		up->isr &= ~INT_CTR;
 	}
 
+#ifdef SOF_DEBUG
 	/* We see 913 SOF per second.
 	 * (actually, 1000 when we get our timer just right)
 	 * This confirms that we can clear the INT_SOF bit in the isr
@@ -501,6 +517,7 @@ usb_lp_handler ( void )
 	    sof_count++;
 	    return;
 	}
+#endif
 
 	P_handler ();
 }
@@ -537,6 +554,146 @@ pma_clear ( void )
 	p[255] = 0xdeadbeef;
 }
 
+/* Copy from PMA memory to buffer */
+static void
+pma_copy_in ( u32 pma_off, char *buf, int count )
+{
+	int i;
+	int num = (count + 1) / 2;
+	u16 *bp = (u16 *) buf;
+	u32 *pp;
+	u32 addr;
+
+	addr = (u32) USB_RAM;
+	addr += 2 * pma_off;
+	pp = (u32 *) addr;
+
+	for ( i=0; i<num; i++ )
+	    *bp++ = *pp++;
+}
+
+/* Copy from buffer to PMA memory */
+static void
+pma_copy_out ( u32 pma_off, char *buf, int count )
+{
+	int i;
+	int num = (count + 1) / 2;
+	u16 *bp = (u16 *) buf;
+	u32 *pp;
+	u32 addr;
+
+	addr = (u32) USB_RAM;
+	addr += 2 * pma_off;
+	pp = (u32 *) addr;
+
+	for ( i=0; i<num; i++ )
+	    *pp++ = *bp++;
+}
+
+/* Setting the stat field in an Endpoint register requires all
+ * kinds of jumping through hoops
+ * The two CTR bits can be cleared by writing 0, writing 1 is a NOOP.
+ * The various "toggle" bits are toggled by writing 1, 0 is a NOOP.
+ * The DTOG, and "status" bits are toggle bits
+ * Then we have plain old r/w bits (EA, type, kind)
+ * Finally the SETUP bit is read only
+ */
+
+#define	EP_W0_BITS	EP_CTR_RX | EP_CTR_TX
+#define	EP_TOGGLE_TX	EP_DTOG_RX | EP_DTOG_TX | EP_STAT_RX
+#define	EP_TOGGLE_RX	EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX
+
+static void
+endpoint_set_rx ( int ep, int new )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	val |= EP_W0_BITS;
+	val &= ~ EP_TOGGLE_RX;
+
+	/* flip these to get desired status */
+	val ^= new;
+
+	up->epr[ep] = val;
+}
+
+static void
+endpoint_set_tx ( int ep, int new )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	val |= EP_W0_BITS;
+	val &= ~ EP_TOGGLE_TX;
+
+	/* flip these to get desired status */
+	val ^= new;
+
+	up->epr[ep] = val;
+}
+
+/* send data on an endpoint */
+void
+endpoint_send ( int ep, char *buf, int count )
+{
+	struct btable_entry *bte;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	bte->tx_count = count;
+
+	pma_copy_out ( bte->tx_addr, buf, count );
+	endpoint_set_tx ( ep, EP_TX_VALID );
+}
+
+/* get data that has been received on an endpoint */
+int
+endpoint_recv ( int ep, char *buf )
+{
+	struct btable_entry *bte;
+	int count;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	count = bte->rx_count & 0x3ff;
+	pma_copy_in ( bte->rx_addr, buf, count );
+
+	return count;
+}
+
+/* flag an endpoint ready to receive */
+void
+endpoint_recv_ready ( int ep )
+{
+	struct btable_entry *bte;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	bte->rx_count &= ~0x3ff;
+
+	endpoint_set_rx ( ep, EP_RX_VALID );
+}
+
+/* Quick and dirty.
+ * could be in a library somewhere, but it isn't
+ */
+static void
+memset ( char *buf, int val, int count )
+{
+	char *p = buf;
+	int i;
+
+	for ( i=0; i<count; i++ )
+	    *p++ = val;
+}
+
 #ifdef notdef
 /* Not useful */
 static void
@@ -552,20 +709,6 @@ force_reset ( void )
 	up->ctrl = CTRL_CTRM | CTRL_RESETM;
 }
 #endif
-
-
-/* Quick and dirty.
- * could be in a library somewhere, but it isn't
- */
-static void
-memset ( char *buf, int val, int count )
-{
-	char *p = buf;
-	int i;
-
-	for ( i=0; i<count; i++ )
-	    *p++ = val;
-}
 
 /* ====================================================== */
 /* ====================================================== */
@@ -792,8 +935,10 @@ test3 ( void )
 	}
 }
 
+#ifdef SOF_DEBUG
 /* I see 913 SOF per second.
  * My delay_ms may not be precise, so this is an estimate.
+ * -- indeed the delays were crude, we get 1000 SOF per second
  *
  * We still see the SOF bit getting set in the isr register
  * even after we turn it off in the ctrl register.
@@ -818,6 +963,7 @@ test4 ( void )
 		printf ( "SOF count = %d, %d %04x\n", num, cur, up->isr );
 	}
 }
+#endif
 
 
 /* Display stuff for a specific endpoint pair
@@ -1034,23 +1180,6 @@ enum_log_watch ( void )
 
 	enum_log_show ();
 }
-/* Copy from PMA memory to buffer */
-static void
-pma_copy ( u32 pma_off, char *buf, int count )
-{
-	int i;
-	int num = (count + 1) / 2;
-	u16 *bp = (u16 *) buf;
-	u32 *pp;
-	u32 addr;
-
-	addr = (u32) USB_RAM;
-	addr += 2 * pma_off;
-	pp = (u32 *) addr;
-
-	for ( i=0; i<num; i++ )
-	    *bp++ = *pp++;
-}
 
 static char *
 enum_saver ( u32 addr, int count )
@@ -1062,7 +1191,7 @@ enum_saver ( u32 addr, int count )
 	    return (char *) 0;
 
 	rv = &save_buf[s_count];
-	pma_copy ( addr, rv, count );
+	pma_copy_in ( addr, rv, count );
 
 	s_count += count;
 	return rv;
