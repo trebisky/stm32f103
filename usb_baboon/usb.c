@@ -688,6 +688,23 @@ endpoint_recv ( int ep, char *buf )
 	return count;
 }
 
+/* get data that has been received on an endpoint */
+int
+endpoint_recv_limit ( int ep, char *buf, int limit )
+{
+	struct btable_entry *bte;
+	int count;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	count = bte->rx_count & 0x3ff;
+	if ( count > limit ) count = limit;
+
+	pma_copy_in ( bte->rx_addr, buf, count );
+
+	return count;
+}
+
 /* flag an endpoint ready to receive */
 void
 endpoint_recv_ready ( int ep )
@@ -841,8 +858,7 @@ tom_putc ( int cc )
 static void test1 ( void );
 static void test6 ( void );
 static void test7 ( void );
-static void test8 ( void );
-static void test9 ( void );
+static void test10 ( void );
 
 /*
  * Starting this up is a bit problematic.
@@ -902,8 +918,13 @@ usb_debug ( void )
 
 	// test6 ();
 	// test7 ();
-	test8 ();
-	// test9 ();
+
+	// test 8 and 9 just spin while
+	// all the action is driven by
+	// interrupts
+
+	/* echo test */
+	test10 ();
 }
 
 /* This is the original test that came with papoon.
@@ -1055,13 +1076,6 @@ int test8_count;
 int test8_run = 0;
 
 static void
-test8 ( void )
-{
-	for ( ;; )
-	    ;
-}
-
-static void
 test8_send ( void )
 {
 	char buf[2];
@@ -1070,7 +1084,6 @@ test8_send ( void )
 
 	endpoint_send ( 3, buf, 1 );
 }
-
 
 static void
 test8_start ( void )
@@ -1100,6 +1113,17 @@ test8_ctr ( void )
 	test8_send ();
 }
 
+static int run_test8 = 0;
+
+static void
+test8 ( void )
+{
+	run_test8 = 1;
+}
+
+volatile int send_busy = 0;
+volatile int recv_busy = 0;
+
 /* Called from interrupt code on any CTR event
  * on a non-zero endpoint
  */
@@ -1114,36 +1138,70 @@ data_ctr ( void )
 
 	ep = up->isr & 0xf;
 
+	/* Done sending on endpoint 3 */
 	if ( ep != 2 ) {
-	    test8_ctr ();
+	    send_busy = 0;
+	    if ( run_test8 )
+		test8_ctr ();
 	    return;
 	}
 
+#ifdef notdef
 	/* When I type a character, I see:
 	 *  Data CTR on endpoint 2 8212
 	 */
 	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
 	printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 	printf ( " BTE rx_count = %04x\n", bte->rx_count );
+#endif
+	recv_busy = 0;
 
-	count = bte->rx_count & 0xff;
-	if ( count > 2 ) count = 2;
+	// part of test 8
+	// count = endpoint_recv_limit ( ep, buf, 2 );
+	// printf ( "Received %d: %c\n", count, buf[0] );
 
-	pma_copy_in ( bte->rx_addr, buf, count );
+	if ( run_test8 )
+	    test8_start ();
 
-	printf ( "Received %d: %c\n", count, buf[0] );
-
-	test8_start ();
-
-	endpoint_recv_ready ( ep );
+	// endpoint_recv_ready ( ep );
 }
 
+#define RX_ENDPOINT	2
+#define TX_ENDPOINT	3
+
 static void
-test9 ( void )
+test10 ( void )
 {
-	for ( ;; )
-	    ;
+	char buf[2];
+	int count;
+	int echo_count = 0;
+
+	printf ( "Running echo demo (test10)\n" );
+
+	for ( ;; ) {
+	    while ( recv_busy )
+		;
+	    count = endpoint_recv_limit ( RX_ENDPOINT, buf, 2 );
+	    endpoint_recv_ready ( RX_ENDPOINT );
+	    recv_busy = 1;
+
+	    if ( count < 1 )
+		continue;
+
+	    if ( count > 1 )
+		printf ( "Surprise, recevied %d characters\n", count );
+
+	    if ( buf[0] == '?' )
+		printf ( "%d characters echoed so far\n", echo_count );
+	    echo_count++;
+
+	    while ( send_busy )
+		;
+	    endpoint_send ( TX_ENDPOINT, buf, 1 );
+	    send_busy = 1;
+	}
 }
 
 /* Display stuff for a specific endpoint pair
