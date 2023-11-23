@@ -25,11 +25,6 @@
 // int my_ctr = 1;
 int my_ctr = 0;
 
-// typedef unsigned short u16;
-// typedef unsigned int u32;
-// typedef volatile unsigned int vu32;
-// #define BIT(x)	(1<<x)
-
 /* local Prototypes */
 static void memset ( char *, int, int );
 static void force_reset ( void );
@@ -44,6 +39,8 @@ static void endpoint_init ( void );
 static void pma_copy_in ( u32, char *, int );
 static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
+
+static void data_ctr ( void );
 
 #define USB_BASE        (struct usb *) 0x40005C00
 #define USB_RAM         (u32 *) 0x40006000
@@ -498,9 +495,12 @@ usb_lp_handler ( void )
 		panic ( "bad CTR\n" );
 		up->isr &= ~INT_CTR;
 	    }
+
 	    if ( ep != 0 ) {
 		// endpoint_show ( ep );
 		// usb_show ();
+		data_ctr ();
+		up->isr &= ~INT_CTR;
 	    }
 	}
 
@@ -840,6 +840,9 @@ tom_putc ( int cc )
 
 static void test1 ( void );
 static void test6 ( void );
+static void test7 ( void );
+static void test8 ( void );
+static void test9 ( void );
 
 /*
  * Starting this up is a bit problematic.
@@ -897,7 +900,10 @@ usb_debug ( void )
 	// the papooon echo demo
 	// test1 ();
 
-	test6 ();
+	// test6 ();
+	// test7 ();
+	test8 ();
+	// test9 ();
 }
 
 /* This is the original test that came with papoon.
@@ -1014,6 +1020,131 @@ test6 ( void )
 	}
 }
 
+/* This fails
+ * Wireshark shows a 2 byte packet getting sent,
+ * so it is not my code failing to send data,
+ * but some issue with picocom on the other end and/or
+ * the linux ACM driver.
+ */
+static void
+test7 ( void )
+{
+	char buf[4];
+
+	buf[0] = '7';
+	buf[1] = '8';
+
+	for ( ;; ) {
+	    endpoint_send ( 3, buf, 2 );
+	    delay_ms ( 5 );
+	}
+}
+
+/* The object here is to send characters as fast as we can
+ * back to back.
+ * It gets help from code in the interrupt handler.
+ *
+ * We see about 7 seconds for 500,000 characters,
+ * so 71,428 characters per second
+ * 71 characters per millisecond.
+ */
+
+#define TEST8_LIMIT	500000
+
+int test8_count;
+int test8_run = 0;
+
+static void
+test8 ( void )
+{
+	for ( ;; )
+	    ;
+}
+
+static void
+test8_send ( void )
+{
+	char buf[2];
+
+	buf[0] = '5';
+
+	endpoint_send ( 3, buf, 1 );
+}
+
+
+static void
+test8_start ( void )
+{
+	test8_count = 0;
+	test8_run = 1;
+
+	printf ( "Test 8 start\n" );
+
+	test8_send ();
+}
+
+static void
+test8_ctr ( void )
+{
+	if ( ! test8_run )
+	    return;
+
+	if ( test8_count > TEST8_LIMIT ) {
+	    printf ( "Test 8 done\n" );
+	    test8_run = 0;
+	    return;
+	}
+
+	++test8_count;
+
+	test8_send ();
+}
+
+/* Called from interrupt code on any CTR event
+ * on a non-zero endpoint
+ */
+static void
+data_ctr ( void )
+{
+        struct usb *up = USB_BASE;
+	struct btable_entry *bte;
+	int ep;
+	char buf[2];
+	int count;
+
+	ep = up->isr & 0xf;
+
+	if ( ep != 2 ) {
+	    test8_ctr ();
+	    return;
+	}
+
+	/* When I type a character, I see:
+	 *  Data CTR on endpoint 2 8212
+	 */
+	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
+	printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+	printf ( " BTE rx_count = %04x\n", bte->rx_count );
+
+	count = bte->rx_count & 0xff;
+	if ( count > 2 ) count = 2;
+
+	pma_copy_in ( bte->rx_addr, buf, count );
+
+	printf ( "Received %d: %c\n", count, buf[0] );
+
+	test8_start ();
+
+	endpoint_recv_ready ( ep );
+}
+
+static void
+test9 ( void )
+{
+	for ( ;; )
+	    ;
+}
 
 /* Display stuff for a specific endpoint pair
  */
