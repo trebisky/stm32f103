@@ -20,7 +20,7 @@
 #define DESC_TYPE_INTERFACE	4
 #define DESC_TYPE_ENDPOINT	5
 
-const u8 my_device_desc[] = {
+static const u8 my_device_desc[] = {
     0x12,   // bLength
     DESC_TYPE_DEVICE,
     0x00,
@@ -120,8 +120,9 @@ descriptor_request ( struct setup *sp )
 
 	if ( what == 1 ) {	// device
 	    endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
-	    // would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
 	    return 1;
+	    // would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
+	    // return 0;
 	}
 
 	//if ( what == 2 )	// config
@@ -133,6 +134,7 @@ descriptor_request ( struct setup *sp )
 static int
 interface_request ( struct setup *sp )
 {
+	return 0;
 }
 
 static void
@@ -158,6 +160,7 @@ usb_control ( char *buf, int count )
 int
 usb_control_tx ( void )
 {
+	return 0;
 }
 
 /* =================================================================================== */

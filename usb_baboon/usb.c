@@ -436,8 +436,11 @@ ctr0 ( void )
 
 	    /* do we really need this check ? */
 	    bte = & ((struct btable_entry *) USB_RAM) [0];
-	    if ( bte->rx_count & 0x3ff > SETUP_BUF )
+	    count = bte->rx_count & 0x3ff;
+	    if ( count > SETUP_BUF ) {
+		printf ( "Setup too big: %d\n", count );
 		panic ( "setup count" );
+	    }
 
 	    count = endpoint_recv ( 0, buf );
 
@@ -445,6 +448,8 @@ ctr0 ( void )
 		return usb_setup ( buf, count );
 	    else
 		return usb_control ( buf, count );
+#ifdef notdef
+#endif
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
@@ -467,6 +472,7 @@ usb_lp_handler ( void )
 	int ep;
 	int stat;
 
+	/* This allows enumeration capture */
 	interrupt_debug ();
 
 	/* for now, relay to papoon */
@@ -479,13 +485,23 @@ usb_lp_handler ( void )
 	    ep = up->isr & 0xf;
 	    stat = 0;
 	    if ( ep == 0 ) {
+		// endpoint_show ( 0 );
 		if ( my_ctr )
 		    stat = ctr0 ();
 		else
 		    stat = dummy_ctr0 ();
 	    }
-	    if ( stat )
+	    if ( stat ) {
+		/* XXX - not really a panic, but we
+		 * stop the show for debugging.
+		 */
+		panic ( "bad CTR\n" );
 		up->isr &= ~INT_CTR;
+	    }
+	    if ( ep != 0 ) {
+		// endpoint_show ( ep );
+		// usb_show ();
+	    }
 	}
 
 #ifdef SOF_DEBUG
@@ -599,9 +615,9 @@ pma_copy_out ( u32 pma_off, char *buf, int count )
  * Finally the SETUP bit is read only
  */
 
-#define	EP_W0_BITS	EP_CTR_RX | EP_CTR_TX
-#define	EP_TOGGLE_TX	EP_DTOG_RX | EP_DTOG_TX | EP_STAT_RX
-#define	EP_TOGGLE_RX	EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX
+#define	EP_W0_BITS	(EP_CTR_RX | EP_CTR_TX)
+#define	EP_TOGGLE_TX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_RX)
+#define	EP_TOGGLE_RX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX)
 
 static void
 endpoint_set_rx ( int ep, int new )
@@ -628,6 +644,7 @@ endpoint_set_tx ( int ep, int new )
 	u32 val;
 
 	val = up->epr[ep];
+	// printf ( "Set tx in: %04x\n", val );
 
 	/* Make sure these bits are not changed */
 	val |= EP_W0_BITS;
@@ -637,6 +654,7 @@ endpoint_set_tx ( int ep, int new )
 	val ^= new;
 
 	up->epr[ep] = val;
+	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
 }
 
 /* send data on an endpoint */
@@ -645,12 +663,14 @@ endpoint_send ( int ep, char *buf, int count )
 {
 	struct btable_entry *bte;
 
+
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 
 	bte->tx_count = count;
 
 	pma_copy_out ( bte->tx_addr, buf, count );
 	endpoint_set_tx ( ep, EP_TX_VALID );
+	// endpoint_show ( ep );
 }
 
 /* get data that has been received on an endpoint */
@@ -819,6 +839,7 @@ tom_putc ( int cc )
 /* ====================================================== */
 
 static void test1 ( void );
+static void test6 ( void );
 
 /*
  * Starting this up is a bit problematic.
@@ -873,8 +894,10 @@ usb_debug ( void )
 	enum_log_watch ();
 #endif
 
-	// follow it with the papooon echo demo
-	test1 ();
+	// the papooon echo demo
+	// test1 ();
+
+	test6 ();
 }
 
 /* This is the original test that came with papoon.
@@ -965,6 +988,32 @@ test4 ( void )
 }
 #endif
 
+/* Works beautifully sending single characters.
+ * try sending 2 and you get nothing at the other end.
+ * Perhaps this is part of the ACM specification?
+ *
+ * At any event, this seems to demonstrate that
+ *  endpoint_send() works.
+ */
+static void
+test6 ( void )
+{
+	char buf[4];
+
+	buf[0] = '7';
+	// buf[1] = '8';
+
+	for ( ;; ) {
+	    if ( buf[0] == '7' )
+		buf[0] = '-';
+	    else
+		buf[0] = '7';
+	    endpoint_send ( 3, buf, 1 );
+	    // endpoint_send ( 3, buf, 2 );
+	    delay_ms ( 5 );
+	}
+}
+
 
 /* Display stuff for a specific endpoint pair
  */
@@ -976,19 +1025,20 @@ endpoint_show ( int ep )
         struct usb *up = USB_BASE;
 	char *buf;
 
-	printf ( "EPR %d = %04x\n", ep, up->epr[ep] );
+	if ( up->epr[ep] == 0 )
+	    return;
 
-	if ( ep < 4 ) {
-	    bte = &bt[ep];
-	    printf ( "BTE ep-%d @ %08x\n", ep, bte );
-	    buf = (char *) USB_RAM + 2 * bte->tx_addr;
-	    printf ( "BTE, ep-%d tx addr  = %04x - %08x\n", ep, bte->tx_addr, buf );
-	    printf ( "BTE, ep-%d tx count = %04x\n", ep, bte->tx_count );
+	printf ( "Endpoint %d: EPR = %04x\n", ep, up->epr[ep] );
 
-	    buf = (char *) USB_RAM + 2 * bte->rx_addr;
-	    printf ( "BTE, ep-%d rx addr  = %04x - %08x\n", ep, bte->rx_addr, buf );
-	    printf ( "BTE, ep-%d rx count = %04x\n", ep, bte->rx_count );
-	}
+	bte = &bt[ep];
+	printf ( "BTE ep-%d @ %08x\n", ep, bte );
+	buf = (char *) USB_RAM + 2 * bte->tx_addr;
+	printf ( "BTE, ep-%d tx addr  = %04x - %08x\n", ep, bte->tx_addr, buf );
+	printf ( "BTE, ep-%d tx count = %04x\n", ep, bte->tx_count );
+
+	buf = (char *) USB_RAM + 2 * bte->rx_addr;
+	printf ( "BTE, ep-%d rx addr  = %04x - %08x\n", ep, bte->rx_addr, buf );
+	printf ( "BTE, ep-%d rx count = %04x\n", ep, bte->rx_count );
 }
 
 /* Display entire btable and all endpoints
@@ -1015,11 +1065,13 @@ usb_show ( void )
 {
         struct usb *up = USB_BASE;
 
-        printf ( "BTABLE = %08x\n", up->btable );
-        printf ( "CTRL  = %08x\n", up->ctrl );
-        printf ( "ISR   = %08x\n", up->isr );
-        printf ( "EPR-0 = %08x\n", up->epr[0] );
-        printf ( "EPR-1 = %08x\n", up->epr[1] );
+        printf ( "BTABLE = %04x\n", up->btable );
+        printf ( "CTRL  = %04x\n", up->ctrl );
+        printf ( "ISR   = %04x\n", up->isr );
+        printf ( "EPR-0 = %04x\n", up->epr[0] );
+        printf ( "EPR-1 = %04x\n", up->epr[1] );
+        printf ( "EPR-2 = %04x\n", up->epr[2] );
+        printf ( "EPR-3 = %04x\n", up->epr[3] );
 
 	btable_show ();
 }

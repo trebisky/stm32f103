@@ -210,7 +210,7 @@ startup ( void )
 void
 panic ( char *msg )
 {
-	printf ( "%s\n", msg );
+	printf ( "Panic!! -- %s\n", msg );
 	for ( ;; )
 	    ;
 }

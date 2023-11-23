@@ -351,6 +351,8 @@ const uint16_t          data_length)  // trust caller <= max_send_packet
         return false;
 
     uint8_t     eprn_ndx = _epaddr2eprn[endpoint];
+    // printf ( "SEND %d --> %d\n", endpoint, eprn_ndx );
+    // translates 1 to 3 for the current ACM setup
 
     writ_pma_data(data, _endpoints[eprn_ndx].send_pma, data_length);
 
