@@ -21,7 +21,8 @@
 
 #include "protos.h"
 
-// set to 0 to let papoon handle CTR
+// set to 0 to let papoon handle
+// endpoint 0 CTR entirely
 // int my_ctr = 1;
 int my_ctr = 0;
 
@@ -33,6 +34,7 @@ void usb_show ( void );
 void tjt_enum_logger ( int );
 void usb_debug ( void );
 static void usb_hw_init ( void );
+static void usb_reset ( void );
 static void pma_clear ( void );
 static void set_address ( int );
 static void endpoint_init ( void );
@@ -142,11 +144,22 @@ struct btable_entry {
 	u32	rx_count;
 };
 
+volatile static u8	ep_flags[NUM_EP];
+
+#define	F_RX_BUSY	0x01
+#define	F_TX_BUSY	0x02
+
 /* =================================== */
 
 #define USB_HP_IRQ	19
 #define USB_LP_IRQ	20
 #define USB_WK_IRQ	42
+
+/* =================================== */
+/* Correct for the CDC-ACM device */
+
+#define RX_ENDPOINT	2
+#define TX_ENDPOINT	3
 
 /* ====================================================== */
 /* ====================================================== */
@@ -157,8 +170,21 @@ void
 usb_init ( void )
 {
 	usb_hw_init ();
+	usb_reset ();
 
 	usb_debug ();
+}
+
+/* Called both during initialization and
+ * during a USB reset event.
+ */
+static void
+usb_reset ( void )
+{
+	int i;
+
+	for ( i=0; i<NUM_EP; i++ )
+	    ep_flags[i] = 0;
 }
 
 static void
@@ -418,6 +444,8 @@ static int sof_count = 0;
 
 #define SETUP_BUF	10
 
+/* Here when I want to try to handle CTR on endpoint 0
+ */
 static int
 ctr0 ( void )
 {
@@ -441,15 +469,19 @@ ctr0 ( void )
 
 	    count = endpoint_recv ( 0, buf );
 
-	    if ( up->epr[0] & EP_SETUP )
+	    if ( up->epr[0] & EP_SETUP ) {
+		printf ( "A" );
 		return usb_setup ( buf, count );
-	    else
+	    } else {
+		printf ( "B" );
 		return usb_control ( buf, count );
+	    }
 #ifdef notdef
 #endif
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
+	    printf ( "C" );
 	    return usb_control_tx ();
 	}
 
@@ -472,14 +504,21 @@ usb_lp_handler ( void )
 	/* This allows enumeration capture */
 	interrupt_debug ();
 
-	/* for now, relay to papoon */
+	/* Reset interrupt.
+	 * for now, relay to papoon
+	 */
 	if ( up->isr & INT_RESET ) {
 	    P_reset ();
 	    up->isr &= ~INT_RESET;
 	}
 
+	/* Correct transfer interrupt.
+	 * We handle some of these for endpoint 0
+	 * We handle all of them for other endpoints
+	 */
 	if ( up->isr & INT_CTR ) {
 	    ep = up->isr & 0xf;
+
 	    stat = 0;
 	    if ( ep == 0 ) {
 		// endpoint_show ( 0 );
@@ -488,12 +527,14 @@ usb_lp_handler ( void )
 		else
 		    stat = dummy_ctr0 ();
 	    }
+
 	    if ( stat ) {
 		/* XXX - not really a panic, but we
 		 * stop the show for debugging.
 		 */
-		panic ( "bad CTR\n" );
+		// panic ( "bad CTR\n" );
 		up->isr &= ~INT_CTR;
+		return;
 	    }
 
 	    if ( ep != 0 ) {
@@ -503,6 +544,9 @@ usb_lp_handler ( void )
 		up->isr &= ~INT_CTR;
 	    }
 	}
+
+	/* Fall through to hand off to Papoon
+	 */
 
 #ifdef SOF_DEBUG
 	/* We see 913 SOF per second.
@@ -619,6 +663,10 @@ pma_copy_out ( u32 pma_off, char *buf, int count )
 #define	EP_TOGGLE_TX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_RX)
 #define	EP_TOGGLE_RX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX)
 
+#ifdef notdef
+/* Made obsolete (for now anyway) by the
+ * routine below.
+ */
 static void
 endpoint_set_rx ( int ep, int new )
 {
@@ -636,7 +684,35 @@ endpoint_set_rx ( int ep, int new )
 
 	up->epr[ep] = val;
 }
+#endif
 
+/* Same as the above, but always marks status
+ * as VALID, and it clears the CTR_RX bit
+ */
+static void
+endpoint_set_rx_ready ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	// val |= EP_W0_BITS;
+	// clear CTR_RX, leave CTR_TX unchanged.
+	val |= EP_CTR_TX;
+	val &= ~ EP_TOGGLE_RX;
+
+	/* flip these to get desired status */
+	val ^= EP_RX_VALID;
+
+	up->epr[ep] = val;
+}
+
+#ifdef notdef
+/* Made obsolete (for now anyway) by the
+ * routine below.
+ */
 static void
 endpoint_set_tx ( int ep, int new )
 {
@@ -656,6 +732,32 @@ endpoint_set_tx ( int ep, int new )
 	up->epr[ep] = val;
 	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
 }
+#endif
+
+/* Called when we send.
+ * we set status VALID and also clear
+ * the CTR_TX bit.
+ */
+static void
+endpoint_set_tx_valid ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+	// printf ( "Set tx in: %04x\n", val );
+
+	/* Make sure these bits are not changed */
+	// clear CTR_TX, leave CTR_RX unchanged.
+	val |= EP_CTR_RX;
+	val &= ~ EP_TOGGLE_TX;
+
+	/* flip these to get desired status */
+	val ^= EP_TX_VALID;
+
+	up->epr[ep] = val;
+	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
+}
 
 /* send data on an endpoint */
 void
@@ -669,7 +771,10 @@ endpoint_send ( int ep, char *buf, int count )
 	bte->tx_count = count;
 
 	pma_copy_out ( bte->tx_addr, buf, count );
-	endpoint_set_tx ( ep, EP_TX_VALID );
+
+	// endpoint_set_tx ( ep, EP_TX_VALID );
+	endpoint_set_tx_valid ( ep );
+
 	// endpoint_show ( ep );
 }
 
@@ -715,7 +820,8 @@ endpoint_recv_ready ( int ep )
 
 	bte->rx_count &= ~0x3ff;
 
-	endpoint_set_rx ( ep, EP_RX_VALID );
+	// endpoint_set_rx ( ep, EP_RX_VALID );
+	endpoint_set_rx_ready ( ep );
 }
 
 /* Quick and dirty.
@@ -1121,9 +1227,6 @@ test8 ( void )
 	run_test8 = 1;
 }
 
-volatile int send_busy = 0;
-volatile int recv_busy = 0;
-
 /* Called from interrupt code on any CTR event
  * on a non-zero endpoint
  */
@@ -1138,9 +1241,16 @@ data_ctr ( void )
 
 	ep = up->isr & 0xf;
 
-	/* Done sending on endpoint 3 */
+	// printf ( "Data CTR on endpoint %d\n", ep );
+
+	/* If it ain't 2, it must be 3.
+	 * We only ever send data on 3.
+	 * We should clear the * CTR bit
+	 * either here or when we send new
+	 * data (we do the latter).
+	 */
 	if ( ep != 2 ) {
-	    send_busy = 0;
+	    ep_flags[TX_ENDPOINT] &= ~F_TX_BUSY;
 	    if ( run_test8 )
 		test8_ctr ();
 	    return;
@@ -1156,7 +1266,8 @@ data_ctr ( void )
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 	printf ( " BTE rx_count = %04x\n", bte->rx_count );
 #endif
-	recv_busy = 0;
+
+	ep_flags[RX_ENDPOINT] &= ~F_RX_BUSY;
 
 	// part of test 8
 	// count = endpoint_recv_limit ( ep, buf, 2 );
@@ -1168,9 +1279,6 @@ data_ctr ( void )
 	// endpoint_recv_ready ( ep );
 }
 
-#define RX_ENDPOINT	2
-#define TX_ENDPOINT	3
-
 static void
 test10 ( void )
 {
@@ -1180,12 +1288,20 @@ test10 ( void )
 
 	printf ( "Running echo demo (test10)\n" );
 
+	endpoint_recv_ready ( RX_ENDPOINT );
+	ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
+
 	for ( ;; ) {
-	    while ( recv_busy )
+	    // printf ( "Wait for data\n" );
+	    while ( ep_flags[RX_ENDPOINT] & F_RX_BUSY )
 		;
+
 	    count = endpoint_recv_limit ( RX_ENDPOINT, buf, 2 );
+
 	    endpoint_recv_ready ( RX_ENDPOINT );
-	    recv_busy = 1;
+	    ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
+
+	    // printf ( "Got data: %d\n", count );
 
 	    if ( count < 1 )
 		continue;
@@ -1197,10 +1313,10 @@ test10 ( void )
 		printf ( "%d characters echoed so far\n", echo_count );
 	    echo_count++;
 
-	    while ( send_busy )
+	    while ( ep_flags[TX_ENDPOINT] & F_TX_BUSY )
 		;
 	    endpoint_send ( TX_ENDPOINT, buf, 1 );
-	    send_busy = 1;
+	    ep_flags[TX_ENDPOINT] |= F_TX_BUSY;
 	}
 }
 
@@ -1361,12 +1477,14 @@ tjt_enum_logger ( int what )
 	    ep->data = enum_saver ( bte->rx_addr, bte->rx_count );
 	}
 
+#ifdef notdef
 	if ( first && what != 2 ) {
 	    printf ( "buf (%d): ", ep->count );
 	    print_buf ( ep->data, ep->count );
 	    printf ( "\n" );
 	    first = 0;
 	}
+#endif
 
 	e_count++;
 }
