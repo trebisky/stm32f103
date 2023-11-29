@@ -23,8 +23,8 @@
 
 // set to 0 to let papoon handle
 // endpoint 0 CTR entirely
-// int my_ctr = 1;
-int my_ctr = 0;
+int my_ctr = 1;
+// int my_ctr = 0;
 
 /* local Prototypes */
 static void memset ( char *, int, int );
@@ -38,6 +38,7 @@ static void usb_reset ( void );
 static void pma_clear ( void );
 static void set_address ( int );
 static void endpoint_init ( void );
+void endpoint_recv_ready ( int );
 static void pma_copy_in ( u32, char *, int );
 static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
@@ -158,8 +159,9 @@ volatile static u8	ep_flags[NUM_EP];
 /* =================================== */
 /* Correct for the CDC-ACM device */
 
-#define RX_ENDPOINT	2
-#define TX_ENDPOINT	3
+#define CONTROL_ENDPOINT	0
+#define RX_ENDPOINT		2
+#define TX_ENDPOINT		3
 
 /* ====================================================== */
 /* ====================================================== */
@@ -467,7 +469,8 @@ ctr0 ( void )
 		panic ( "setup count" );
 	    }
 
-	    count = endpoint_recv ( 0, buf );
+	    count = endpoint_recv ( CONTROL_ENDPOINT, buf );
+	    endpoint_recv_ready ( CONTROL_ENDPOINT );
 
 	    if ( up->epr[0] & EP_SETUP ) {
 		printf ( "A" );
@@ -522,13 +525,14 @@ usb_lp_handler ( void )
 	    stat = 0;
 	    if ( ep == 0 ) {
 		// endpoint_show ( 0 );
-		if ( my_ctr )
+		if ( my_ctr ) {
 		    stat = ctr0 ();
-		else
+		    // printf ( "-- ctr0 returns: %d\n", stat );
+		} else
 		    stat = dummy_ctr0 ();
 	    }
 
-	    if ( stat ) {
+	    if ( my_ctr && stat ) {
 		/* XXX - not really a panic, but we
 		 * stop the show for debugging.
 		 */
@@ -759,6 +763,8 @@ endpoint_set_tx_valid ( int ep )
 	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
 }
 
+#define ENDPOINT_LIMIT	64
+
 /* send data on an endpoint */
 void
 endpoint_send ( int ep, char *buf, int count )
@@ -777,6 +783,20 @@ endpoint_send ( int ep, char *buf, int count )
 
 	// endpoint_show ( ep );
 }
+
+/* Send a zero length packet */
+void
+endpoint_send_zlp ( int ep )
+{
+	struct btable_entry *bte;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	bte->tx_count = 0;
+
+	endpoint_set_tx_valid ( ep );
+}
+
 
 /* get data that has been received on an endpoint */
 int

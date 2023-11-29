@@ -41,6 +41,112 @@ static const u8 my_device_desc[] = {
     0x01    // bNumConfigurations
 };
 
+// not const because set total size entry
+static const u8  my_config_desc[] = {
+    // Configuration Descriptor
+    0x09,   // bLength: Configuration Descriptor size
+    DESC_TYPE_CONFIG,
+    0x43,   // wTotalLength: including sub-descriptors
+    0x00,   //      "      : MSB of uint16_t
+    0x02,   // bNumInterfaces: 2 interface
+    0x01,   // bConfigurationValue: Configuration value
+    0x00,   // iConfiguration: Index of string descriptor for configuration
+    0xC0,   // bmAttributes: self powered
+    0x32,   // MaxPower 0 mA
+    // To here is 9 bytes and is the first thing we dole out.
+
+    // Interface Descriptor
+    0x09,   // bLength: Interface Descriptor size
+    // static_cast<uint8_t>(UsbDev::DescriptorType::INTERFACE),
+    DESC_TYPE_INTERFACE,	// Interface descriptor type
+    0x00,   // bInterfaceNumber: Number of Interface
+    0x00,   // bAlternateSetting: Alternate setting
+    0x01,   // bNumEndpoints: One endpoints used
+    0x02,   // bInterfaceClass: Communication Interface Class
+    0x02,   // bInterfaceSubClass: Abstract Control Model
+    0x01,   // bInterfaceProtocol: Common AT commands
+    0x00,   // iInterface:
+
+    // Header Functional Descriptor
+    0x05,   // bFunctionLength
+    0x24,   // bDescriptorType: CS_INTERFACE
+    0x00,   // bDescriptorSubtype: Header Func Desc
+    0x10,   // bcdCDC: spec release number
+    0x01,
+
+    // Call Management Functional Descriptor
+    0x05,   // bFunctionLength
+    0x24,   // bDescriptorType: CS_INTERFACE
+    0x01,   // bDescriptorSubtype: Call Management Func Desc
+    0x00,   // bmCapabilities: D0+D1
+    0x01,   // bDataInterface: 1
+
+    // ACM Functional Descriptor
+    0x04,   // bFunctionLength
+    0x24,   // bDescriptorType: CS_INTERFACE
+    0x02,   // bDescriptorSubtype: Abstract Control Management desc
+    0x02,   // bmCapabilities
+
+    // Union Functional Descriptor
+    0x05,   // bFunctionLength
+    0x24,   // bDescriptorType: CS_INTERFACE
+    0x06,   // bDescriptorSubtype: Union func desc
+    0x00,   // bMasterInterface: Communication class interface
+    0x01,   // bSlaveInterface0: Data Class Interface
+
+#define ACM_ENDPOINT		2
+#define CDC_ENDPOINT_OUT	3
+#define CDC_ENDPOINT_IN		1
+
+#define ACM_DATA_SIZE	8
+#define CDC_OUT_DATA_SIZE	64
+#define CDC_IN_DATA_SIZE	64
+
+#define ENDPOINT_DIR_IN	0x80
+#define ENDPOINT_TYPE_BULK	2
+#define ENDPOINT_TYPE_INTERRUPT	3
+
+    // Endpoint 2 Descriptor
+    0x07,   // bLength: Endpoint Descriptor size
+    DESC_TYPE_ENDPOINT,
+    ACM_ENDPOINT | ENDPOINT_DIR_IN,	// bEndpointAddress
+    ENDPOINT_TYPE_INTERRUPT,		// bmAttributes
+    ACM_DATA_SIZE,			// wMaxPacketSize:
+    0x00,
+    0xFF,   // bInterval:
+
+
+    // Data class interface descriptor
+    0x09,   // bLength: Interface Descriptor size
+    DESC_TYPE_INTERFACE,
+    0x01,   // bInterfaceNumber: Number of Interface
+    0x00,   // bAlternateSetting: Alternate setting
+    0x02,   // bNumEndpoints: Two endpoints used
+    0x0A,   // bInterfaceClass: CDC
+    0x00,   // bInterfaceSubClass:
+    0x00,   // bInterfaceProtocol:
+    0x00,   // iInterface:
+
+    // Endpoint 3 Descriptor
+    0x07,   // bLength: Endpoint Descriptor size
+    DESC_TYPE_ENDPOINT,
+    CDC_ENDPOINT_OUT,		// bEndpointAddress: (OUT3)
+    ENDPOINT_TYPE_BULK,		// bmAttributes: Bulk
+    CDC_OUT_DATA_SIZE,		// wMaxPacketSize: 64
+    0x00,                                               //    MSB of uint16_t
+    0x00,   // bInterval: ignore for Bulk transfer
+
+    // Endpoint 1 Descriptor
+    0x07,                               // bLength: Endpoint Descriptor size
+    DESC_TYPE_ENDPOINT,
+    CDC_ENDPOINT_IN | ENDPOINT_DIR_IN,	//bEndpointAddress
+    ENDPOINT_TYPE_BULK,			// bmAttributes: Bulk
+    CDC_IN_DATA_SIZE,			// wMaxPacketSize:
+    0x00,
+    0x00                                // bInterval
+};
+
+
 /* ========================================================================= */
 /* ========================================================================= */
 /* ========================================================================= */
@@ -63,18 +169,116 @@ static void would_send ( char *, char *, int );
 #define RT_TYPE		(0x3<<5)
 #define RT_DIR		0x80
 
-/* setup packet was received */
+static int get_descriptor ( struct setup * );
+static int set_address ( struct setup * );
+static int set_configuration ( struct setup * );
+
+/* We get either setup or control packets on endpoint 0
+ * This file handles both.
+ */
+
+/* setup packet was received
+ * unlike much other USB code, I don't code up a tree like
+ * hierarchy of handlers, but I "cheat" and test the
+ * combination rtype+request word.
+ * Most of the enumeration packets are 8006, which is
+ * "get descriptor"
+ */
 int
 usb_setup ( char *buf, int count )
 {
 	struct setup *sp;
-	int type;
-	int recip;
+	int tag;
 
 	// printf ( "Setup packet: %d bytes -- " );
 	// print_buf ( buf, count );
 
+	/* Just ignore ZLP (zero length packets) */
+	if ( count == 0 )
+	    return 0;
+
 	sp = (struct setup *) buf;
+
+	tag = sp->rtype << 8 | sp->request;
+
+	switch ( tag ) {
+	    case 0x8006:
+		return get_descriptor ( sp );
+	    case 0x0005:
+		return set_address ( sp );
+	    case 0x0009:
+		return set_configuration ( sp );
+	    default:
+		break;
+	}
+
+	/* Not handled */
+	return 0;
+}
+
+static int
+get_descriptor ( struct setup *sp )
+{
+	int len;
+
+	switch ( sp->value ) {
+	    /* device descriptor */
+	    case 1:
+		// printf ( " reply with %d\n", sizeof(my_device_desc) );
+		endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
+		return 1;
+		// would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
+	    /* device qualifier */
+	    case 6:
+		endpoint_send_zlp ( 0 );
+	    /* configuration */
+	    case 2:
+		/* XXX for now */
+		if ( sp->length > 64 )
+		    return 0;
+
+		/* This is interesting.  We have 67 bytes (64+3) to send.
+		 * But the game is even more complex.
+		 * The first request asks for 9 bytes, so we send the
+		 * first 9 bytes as a response.
+		 * That contains the 0x43 value for the total length.
+		 * The host comes back a second time asking for the
+		 * full 67 bytes, but we have to break that into
+		 * 2 pieces, the first 64, the second 3.
+		 * We let endpoint_send() handle that.
+		 */
+		len = sizeof(my_config_desc);
+		if ( len > sp->length )
+		    len = sp->length;
+		endpoint_send ( 0, my_config_desc, len );
+		return 0;
+	    default:
+		break;
+	}
+
+	return 0;
+}
+
+static int
+set_address ( struct setup *sp )
+{
+	return 0;
+}
+
+static int
+set_configuration ( struct setup *sp )
+{
+	return 0;
+}
+
+/* XXX ----------------------------------- */
+/* XXX ----------------------------------- */
+/* XXX ----------------------------------- */
+
+#ifdef notdef
+	int type;
+	int recip;
+
 	type = (sp->rtype & RT_TYPE) >> 5;
 	recip = sp->rtype & RT_RECIPIENT;
 
@@ -92,17 +296,10 @@ usb_setup ( char *buf, int count )
 	    ;
 	}
 
-	// printf ( "Spin in enum for debug\n" );
-	// for ( ;; )
-	//     ;
-
-	/* Not handled */
-	return 0;
-}
-
 static int
 device_request ( struct setup *sp )
 {
+	// printf ( "Device request\n" );
 	if ( sp->request == 6 )		// Get Descriptor
 	    return descriptor_request ( sp );
 	return 0;
@@ -118,7 +315,10 @@ descriptor_request ( struct setup *sp )
 	int what = sp->value >> 8;
 	int index = sp->value & 0xff;
 
+	// printf ( "Descriptor request\n" );
+
 	if ( what == 1 ) {	// device
+	    // printf ( " reply with %d\n", sizeof(my_device_desc) );
 	    endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
 	    return 1;
 	    // would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
@@ -144,6 +344,7 @@ would_send ( char *msg, char *buf, int count )
 	printf ( "%d : ", count );
 	print_buf ( buf, count );
 }
+#endif
 
 /* ----------------------------------------------- */
 
