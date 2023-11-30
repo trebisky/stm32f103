@@ -23,8 +23,8 @@
 
 // set to 0 to let papoon handle
 // endpoint 0 CTR entirely
-int my_ctr = 1;
-// int my_ctr = 0;
+// int my_ctr = 1;
+int my_ctr = 0;
 
 /* local Prototypes */
 static void memset ( char *, int, int );
@@ -42,6 +42,7 @@ void endpoint_recv_ready ( int );
 static void pma_copy_in ( u32, char *, int );
 static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
+static void endpoint_rem ( void );
 
 static void data_ctr ( void );
 
@@ -149,6 +150,7 @@ volatile static u8	ep_flags[NUM_EP];
 
 #define	F_RX_BUSY	0x01
 #define	F_TX_BUSY	0x02
+#define	F_TX_REM	0x80
 
 /* =================================== */
 
@@ -479,13 +481,15 @@ ctr0 ( void )
 		printf ( "B" );
 		return usb_control ( buf, count );
 	    }
-#ifdef notdef
-#endif
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
+	    if ( ep_flags[0] & F_TX_REM ) {
+		endpoint_rem ();
+		return 1;
+	    }
 	    printf ( "C" );
-	    return usb_control_tx ();
+	    // return usb_control_tx ();
 	}
 
 	return 0;
@@ -538,6 +542,7 @@ usb_lp_handler ( void )
 		 */
 		// panic ( "bad CTR\n" );
 		up->isr &= ~INT_CTR;
+		printf ( "M" );
 		return;
 	    }
 
@@ -546,6 +551,7 @@ usb_lp_handler ( void )
 		// usb_show ();
 		data_ctr ();
 		up->isr &= ~INT_CTR;
+		return;
 	    }
 	}
 
@@ -583,6 +589,7 @@ usb_lp_handler ( void )
 	}
 #endif
 
+	printf ( "P" );
 	P_handler ();
 }
 
@@ -690,6 +697,46 @@ endpoint_set_rx ( int ep, int new )
 }
 #endif
 
+/* Clear just the Rx CTR bit
+ */
+static void
+endpoint_clear_rx ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	// val |= EP_W0_BITS;
+	// clear CTR_RX, leave CTR_TX unchanged.
+	val &= ~EP_CTR_RX;
+	val |= EP_CTR_TX;
+	val &= ~ EP_TOGGLE_RX;
+
+	up->epr[ep] = val;
+}
+
+/* Clear just the Tx CTR bit
+ */
+static void
+endpoint_clear_tx ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	// val |= EP_W0_BITS;
+	// clear CTR_RX, leave CTR_TX unchanged.
+	val &= ~EP_CTR_TX;
+	val |= EP_CTR_RX;
+	val &= ~ EP_TOGGLE_RX;
+
+	up->epr[ep] = val;
+}
+
 /* Same as the above, but always marks status
  * as VALID, and it clears the CTR_RX bit
  */
@@ -704,6 +751,7 @@ endpoint_set_rx_ready ( int ep )
 	/* Make sure these bits are not changed */
 	// val |= EP_W0_BITS;
 	// clear CTR_RX, leave CTR_TX unchanged.
+	val &= ~EP_CTR_RX;
 	val |= EP_CTR_TX;
 	val &= ~ EP_TOGGLE_RX;
 
@@ -753,6 +801,7 @@ endpoint_set_tx_valid ( int ep )
 
 	/* Make sure these bits are not changed */
 	// clear CTR_TX, leave CTR_RX unchanged.
+	val &= ~EP_CTR_TX;
 	val |= EP_CTR_RX;
 	val &= ~ EP_TOGGLE_TX;
 
@@ -765,7 +814,79 @@ endpoint_set_tx_valid ( int ep )
 
 #define ENDPOINT_LIMIT	64
 
+/* This crazy business is only set up to work on endpoint 0
+ */
+static char *tx_rem;
+static int tx_rem_count;
+
+/* We can clear the flag as soon as we have copied into
+ * PMA memory.
+ */
+static void
+endpoint_rem ( void )
+{
+	struct btable_entry *bte;
+
+	printf ( "%" );
+	bte = & ((struct btable_entry *) USB_RAM) [0];
+
+	bte->tx_count = tx_rem_count;
+	pma_copy_out ( bte->tx_addr, tx_rem, tx_rem_count );
+	endpoint_set_tx_valid ( 0 );
+	ep_flags[0] &= ~F_TX_REM;
+}
+
 /* send data on an endpoint */
+/* Allow for more data than can be sent in a single transaction.
+ * This requires a wonky arangement with a "callback" in the
+ * interrupt handler -- and only works if the total length
+ * will fit in 2 transaactions (currently anyway).
+ * The need for this is to support the 67 byte config
+ * packet that we send during enumeration.
+ * If I figure out how to break up that packet, I will do
+ * away with all of this.
+ *
+ * This cannot just return while this is pending since the
+ * remnant data is (very likely) on the stack.
+ * It actually isn't in the case of the config packet
+ * in question (which is const and in flash), but coding
+ * it this way protects us for the future, sort of.
+ */
+void
+endpoint_send ( int ep, char *buf, int count )
+{
+	struct btable_entry *bte;
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+
+	if ( count <= ENDPOINT_LIMIT ) {
+	    bte->tx_count = count;
+	    pma_copy_out ( bte->tx_addr, buf, count );
+	    endpoint_set_tx_valid ( ep );
+	    return;
+	}
+
+	tx_rem = &buf[ENDPOINT_LIMIT];
+	tx_rem_count = count - ENDPOINT_LIMIT;
+	ep_flags[ep] |= F_TX_REM;
+
+	bte->tx_count = ENDPOINT_LIMIT;
+	pma_copy_out ( bte->tx_addr, buf, ENDPOINT_LIMIT );
+	endpoint_set_tx_valid ( ep );
+
+	// NO!  Waiting here won't work.  We are already in an
+	//  interrupt handler during enumeration, but it is OK
+	//  if our strings are const and in flash and not
+	//  on the stack.
+	//while ( ep_flags[ep] & F_TX_REM )
+	//    ;
+}
+
+#ifdef notdef
+/* send data on an endpoint */
+/* This is the simple version before we added the rubbish
+ * to allow more than 64 bytes per call (above)
+ */
 void
 endpoint_send ( int ep, char *buf, int count )
 {
@@ -783,6 +904,7 @@ endpoint_send ( int ep, char *buf, int count )
 
 	// endpoint_show ( ep );
 }
+#endif
 
 /* Send a zero length packet */
 void
@@ -857,6 +979,19 @@ memset ( char *buf, int val, int count )
 	    *p++ = val;
 }
 
+/* Also used in usb_enum.c */
+int
+strlen ( char *x )
+{
+	int rv = 0;
+
+	while ( *x++ )
+	    rv++;
+
+	return rv;
+}
+
+
 #ifdef notdef
 /* Not useful */
 static void
@@ -877,17 +1012,6 @@ force_reset ( void )
 /* ====================================================== */
 /* section XXX - odds and ends */
 /* ====================================================== */
-
-static int
-strlen ( char *x )
-{
-	int rv = 0;
-
-	while ( *x++ )
-	    rv++;
-
-	return rv;
-}
 
 /* Tested 11-7-2023 */
 void
@@ -1247,6 +1371,8 @@ test8 ( void )
 	run_test8 = 1;
 }
 
+// int xx_count = 0;
+
 /* Called from interrupt code on any CTR event
  * on a non-zero endpoint
  */
@@ -1261,7 +1387,10 @@ data_ctr ( void )
 
 	ep = up->isr & 0xf;
 
-	// printf ( "Data CTR on endpoint %d\n", ep );
+	//if ( xx_count++ < 10 ) {
+	//    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
+	//    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+	//}
 
 	/* If it ain't 2, it must be 3.
 	 * We only ever send data on 3.
@@ -1270,6 +1399,7 @@ data_ctr ( void )
 	 * data (we do the latter).
 	 */
 	if ( ep != 2 ) {
+	    endpoint_clear_tx ( ep );
 	    ep_flags[TX_ENDPOINT] &= ~F_TX_BUSY;
 	    if ( run_test8 )
 		test8_ctr ();
@@ -1287,6 +1417,7 @@ data_ctr ( void )
 	printf ( " BTE rx_count = %04x\n", bte->rx_count );
 #endif
 
+	endpoint_clear_rx ( ep );
 	ep_flags[RX_ENDPOINT] &= ~F_RX_BUSY;
 
 	// part of test 8
@@ -1312,7 +1443,7 @@ test10 ( void )
 	ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
 
 	for ( ;; ) {
-	    // printf ( "Wait for data\n" );
+	    //printf ( "Waiting for data\n" );
 	    while ( ep_flags[RX_ENDPOINT] & F_RX_BUSY )
 		;
 
@@ -1333,8 +1464,10 @@ test10 ( void )
 		printf ( "%d characters echoed so far\n", echo_count );
 	    echo_count++;
 
+	    //printf ( "Waiting for xmit\n" );
 	    while ( ep_flags[TX_ENDPOINT] & F_TX_BUSY )
 		;
+
 	    endpoint_send ( TX_ENDPOINT, buf, 1 );
 	    ep_flags[TX_ENDPOINT] |= F_TX_BUSY;
 	}

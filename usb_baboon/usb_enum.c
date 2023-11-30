@@ -146,6 +146,17 @@ static const u8  my_config_desc[] = {
     0x00                                // bInterval
 };
 
+/* There is a 16 bit language id we need to send.
+ * Wireshark recognizes0x0409 as " English (United States)"
+ * apparently the language ID codes do not conflict with
+ * unicode characters and this just works.
+ */
+static const u8 my_language_string_desc[] = {
+                4,
+                DESC_TYPE_STRING,
+                0x09,
+		0x04
+};
 
 /* ========================================================================= */
 /* ========================================================================= */
@@ -172,6 +183,7 @@ static void would_send ( char *, char *, int );
 static int get_descriptor ( struct setup * );
 static int set_address ( struct setup * );
 static int set_configuration ( struct setup * );
+static int string_send ( int );
 
 /* We get either setup or control packets on endpoint 0
  * This file handles both.
@@ -189,6 +201,7 @@ usb_setup ( char *buf, int count )
 {
 	struct setup *sp;
 	int tag;
+	int rv = 0;
 
 	// printf ( "Setup packet: %d bytes -- " );
 	// print_buf ( buf, count );
@@ -203,40 +216,54 @@ usb_setup ( char *buf, int count )
 
 	switch ( tag ) {
 	    case 0x8006:
-		return get_descriptor ( sp );
+		rv = get_descriptor ( sp );
+		break;
 	    case 0x0005:
-		return set_address ( sp );
+		rv = set_address ( sp );
+		break;
 	    case 0x0009:
-		return set_configuration ( sp );
+		rv = set_configuration ( sp );
+		break;
 	    default:
 		break;
 	}
 
-	/* Not handled */
-	return 0;
+	printf ( "%d", rv );
+	return rv;
 }
+
+#define D_STRING	3
 
 static int
 get_descriptor ( struct setup *sp )
 {
 	int len;
+	int value;
 
-	switch ( sp->value ) {
+	/* Thanks to the idiot USB business of using the 2 byte
+	 * value field to hold a 1 byte value and some other index.
+	 */
+	// value = sp->value >> 8;
+	value = sp->value;
+
+	printf ( "\nValue: %04x\n", sp->value );
+	switch ( value ) {
+
 	    /* device descriptor */
-	    case 1:
+	    case 1 << 8:
 		// printf ( " reply with %d\n", sizeof(my_device_desc) );
 		endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
 		return 1;
 		// would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
-	    /* device qualifier */
-	    case 6:
-		endpoint_send_zlp ( 0 );
-	    /* configuration */
-	    case 2:
-		/* XXX for now */
-		if ( sp->length > 64 )
-		    return 0;
 
+	    /* device qualifier */
+	    case 6 << 8:
+		printf ( "q" );
+		endpoint_send_zlp ( 0 );
+		return 1;
+
+	    /* configuration */
+	    case 2 << 8:
 		/* This is interesting.  We have 67 bytes (64+3) to send.
 		 * But the game is even more complex.
 		 * The first request asks for 9 bytes, so we send the
@@ -247,16 +274,88 @@ get_descriptor ( struct setup *sp )
 		 * 2 pieces, the first 64, the second 3.
 		 * We let endpoint_send() handle that.
 		 */
+
+		/* The host first asks for 9 bytes,
+		 * so we truncate what we send accordingly.
+		 */
 		len = sizeof(my_config_desc);
 		if ( len > sp->length )
 		    len = sp->length;
+
+		if ( len < 64 ) {
+		    // printf ( "Q" );
+		    endpoint_send ( 0, my_config_desc, len );
+		    return 1;
+		}
+
+		//printf ( "%d", len );
 		endpoint_send ( 0, my_config_desc, len );
-		return 0;
+		return 1;
+
+	    /* string - language codes */
+	    case D_STRING << 8:
+		len = sizeof (my_language_string_desc);
+		endpoint_send ( 0, my_language_string_desc, len );
+		return 1;
+	    case D_STRING << 8 | 1:
+	    case D_STRING << 8 | 2:
+	    case D_STRING << 8 | 3:
+		printf ( "s" );
+		// return string_send ( value & 0xff );
+		len = string_send ( value & 0xff );
+		printf ( "%d", len );
+		return len;
 	    default:
 		break;
 	}
 
+	printf ( "?" );
 	return 0;
+}
+
+struct string_xx {
+	u8	length;
+	u8	type;
+	u16	buf[31];
+};
+
+static u8 *my_strings[] = {
+    "ACME computers",
+    "Stupid ACM port",
+    "1234"
+};
+
+/* We can handle 3 indexes:
+ * 1 - vendor
+ * 2 - device
+ * 3 - serial number
+ */
+static int
+string_send ( int index )
+{
+	struct string_xx xx;
+	u8 *str;
+	int n;
+	int i;
+
+	printf ( "Index %d\n", index );
+	if ( index < 1 || index > 3 )
+	    panic ( "No such string" );
+
+	str = my_strings[index];
+	n = strlen ( str );
+
+	if ( n > 31 )
+	    panic ( "String too big" );
+
+	xx.length = 2*n;
+	xx.type = D_STRING;
+
+	/* 8 bit ascii to 16 bit unicode */
+	for ( i=0; i<n; i++ )
+	    xx.buf[i] = str[i];
+
+	return 3;
 }
 
 static int
@@ -275,76 +374,6 @@ set_configuration ( struct setup *sp )
 /* XXX ----------------------------------- */
 /* XXX ----------------------------------- */
 
-#ifdef notdef
-	int type;
-	int recip;
-
-	type = (sp->rtype & RT_TYPE) >> 5;
-	recip = sp->rtype & RT_RECIPIENT;
-
-	if ( type == 0 ) {	/* Standard */
-	    if ( recip == 0 )	/* Device */
-		return device_request ( sp );
-	    else if ( recip == 1 ) /* Interface */
-		return interface_request ( sp );
-	    else if ( recip == 2 ) /* Endpoint */
-		;
-	    else
-		;
-
-	} else if ( type == 1 ) {	/* Class */
-	    ;
-	}
-
-static int
-device_request ( struct setup *sp )
-{
-	// printf ( "Device request\n" );
-	if ( sp->request == 6 )		// Get Descriptor
-	    return descriptor_request ( sp );
-	return 0;
-}
-
-/* Here the 16 bit value field has the descriptor type
- *  in the top 8 bits, and an index in the low 8.
- *  The index is used for strings
- */
-static int
-descriptor_request ( struct setup *sp )
-{
-	int what = sp->value >> 8;
-	int index = sp->value & 0xff;
-
-	// printf ( "Descriptor request\n" );
-
-	if ( what == 1 ) {	// device
-	    // printf ( " reply with %d\n", sizeof(my_device_desc) );
-	    endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
-	    return 1;
-	    // would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
-	    // return 0;
-	}
-
-	//if ( what == 2 )	// config
-	//if ( what == 3 )	// string
-
-	return 0;
-}
-
-static int
-interface_request ( struct setup *sp )
-{
-	return 0;
-}
-
-static void
-would_send ( char *msg, char *buf, int count )
-{
-	printf ( "Would send %s ", msg );
-	printf ( "%d : ", count );
-	print_buf ( buf, count );
-}
-#endif
 
 /* ----------------------------------------------- */
 
@@ -355,6 +384,7 @@ usb_control ( char *buf, int count )
 	return 0;
 }
 
+#ifdef notdef
 /* control packet send finished (control IN)
  * (there is no setup IN)
  */
@@ -363,6 +393,7 @@ usb_control_tx ( void )
 {
 	return 0;
 }
+#endif
 
 /* =================================================================================== */
 /* =================================================================================== */
