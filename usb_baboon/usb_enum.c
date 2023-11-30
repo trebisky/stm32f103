@@ -173,6 +173,7 @@ struct setup {
 static int device_request ( struct setup * );
 static int descriptor_request ( struct setup * );
 static int interface_request ( struct setup * );
+static void usb_class ( struct setup * );
 
 static void would_send ( char *, char *, int );
 
@@ -203,14 +204,19 @@ usb_setup ( char *buf, int count )
 	int tag;
 	int rv = 0;
 
-	// printf ( "Setup packet: %d bytes -- " );
-	// print_buf ( buf, count );
+	printf ( "Setup packet: %d bytes -- " );
+	print_buf ( buf, count );
 
 	/* Just ignore ZLP (zero length packets) */
 	if ( count == 0 )
 	    return 0;
 
 	sp = (struct setup *) buf;
+
+	if ( sp->rtype == 0x21 ) {
+	    usb_class ( sp );
+	    return 1;
+	}
 
 	tag = sp->rtype << 8 | sp->request;
 
@@ -358,6 +364,34 @@ string_send ( int index )
 	return 3;
 }
 
+/*
+ * So far I have seen one thing outside of enumeration.
+ * When I start up picocom, I get this:
+ * CTR on endpoint 0 8210
+ * EPR[0] = EA60
+ * Read 8 bytes from EP 0 2122030000000000
+ *
+ * The setup bit is set in the EPR
+ * This is a class interface request.
+ * - not a standard request as in chapter 9 of USB 2.0
+ *
+ * 0x20 is "set line coding"
+ * 0x21 is "get line coding"
+ * 0x22 is "control line state"
+ *
+ * Without the ZLP, picocom waits for several seconds.
+ * Sending it makes things as they should be.
+ *
+ * At this point, we just ignore these requests.
+ */
+
+static void
+usb_class ( struct setup *sp )
+{
+	// printf ( "USB class/interface request: %02x\n", sp->request );
+	endpoint_send_zlp ( 0 );
+}
+
 static int
 set_address ( struct setup *sp )
 {
@@ -381,6 +415,9 @@ set_configuration ( struct setup *sp )
 int
 usb_control ( char *buf, int count )
 {
+	printf ( "Control packet: %d bytes -- " );
+	print_buf ( buf, count );
+
 	return 0;
 }
 

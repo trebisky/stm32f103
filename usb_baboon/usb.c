@@ -21,10 +21,17 @@
 
 #include "protos.h"
 
+// flag to use papoon for enumeration or not
+int use_P = 1;
+
 // set to 0 to let papoon handle
 // endpoint 0 CTR entirely
-// int my_ctr = 1;
-int my_ctr = 0;
+int my_ctr = 1;
+// int my_ctr = 0;
+
+static int run_test8 = 0;
+static void test8_start ( void );
+static void test8_ctr ( void );
 
 /* local Prototypes */
 static void memset ( char *, int, int );
@@ -43,6 +50,9 @@ static void pma_copy_in ( u32, char *, int );
 static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
 static void endpoint_rem ( void );
+void print_buf ( char *, int );
+static void endpoint_clear_rx ( int );
+static void endpoint_clear_tx ( int );
 
 static void data_ctr ( void );
 
@@ -449,17 +459,32 @@ static int sof_count = 0;
 #define SETUP_BUF	10
 
 /* Here when I want to try to handle CTR on endpoint 0
+ *
+ * So far I have seen one thing outside of enumeration.
+ * When I start up picocom, I get this:
+ * CTR on endpoint 0 8210
+ * EPR[0] = EA60
+ * Read 8 bytes from EP 0 2122030000000000
+ * The setup bit is set in the EPR
+ * This is a class interface request.
+ * - not a standard request as in chapter 9 of USB 2.0
+ * - it is "control line state"
  */
-static int
+static void
 ctr0 ( void )
 {
         struct usb *up = USB_BASE;
 	struct btable_entry *bte;
 	char buf[SETUP_BUF];
 	int count;
+	int rv;
+	int setup;
 
 	// No interrupts
 	// up->ctrl = 0;
+
+	// printf ( "CTR on endpoint %d %04x\n", 0, up->isr );
+	// printf ( " EPR[%d] = %04x\n", 0, up->epr[0] );
 
 	if ( up->epr[0] & EP_CTR_RX ) {
 
@@ -471,42 +496,119 @@ ctr0 ( void )
 		panic ( "setup count" );
 	    }
 
+	    /* We need to "grab" this bit before clearing
+	     * CTR_RX, as clearling CTR_RX will also clear
+	     * SETUP if it is set.
+	     */
+	    setup = up->epr[0] & EP_SETUP;
+
 	    count = endpoint_recv ( CONTROL_ENDPOINT, buf );
 	    endpoint_recv_ready ( CONTROL_ENDPOINT );
 
-	    if ( up->epr[0] & EP_SETUP ) {
+	    // printf ( "Read %d bytes from EP 0", count );
+	    // print_buf ( buf, count );
+
+	    if ( setup ) {
 		printf ( "A" );
-		return usb_setup ( buf, count );
+		rv = usb_setup ( buf, count );
 	    } else {
 		printf ( "B" );
-		return usb_control ( buf, count );
+		rv = usb_control ( buf, count );
 	    }
+	    // return;
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
+	    /* Send second fragment of Tx packet */
 	    if ( ep_flags[0] & F_TX_REM ) {
 		endpoint_rem ();
-		return 1;
+		return;
 	    }
+
+	    endpoint_clear_tx ( CONTROL_ENDPOINT );
+	    ep_flags[CONTROL_ENDPOINT] &= ~F_TX_BUSY;
+
 	    printf ( "C" );
 	    // return usb_control_tx ();
 	}
 
-	return 0;
+	// return 0;
 }
 
-static int
-dummy_ctr0 ( void )
+// int xx_count = 0;
+
+/* Called from interrupt code on any CTR event
+ * on a non-zero endpoint
+ */
+static void
+data_ctr ( void )
 {
-	return 0;
+        struct usb *up = USB_BASE;
+	struct btable_entry *bte;
+	int ep;
+	char buf[2];
+	int count;
+
+	ep = up->isr & 0xf;
+
+	//if ( xx_count++ < 10 ) {
+	//    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
+	//    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+	//}
+
+	/* If it ain't 2, it must be 3.
+	 * We only ever send data on 3.
+	 * We should clear the * CTR bit
+	 * either here or when we send new
+	 * data (we do the latter).
+	 */
+	if ( ep != 2 ) {
+	    endpoint_clear_tx ( ep );
+	    ep_flags[TX_ENDPOINT] &= ~F_TX_BUSY;
+	    if ( run_test8 )
+		test8_ctr ();
+	    return;
+	}
+
+#ifdef notdef
+	/* When I type a character, I see:
+	 *  Data CTR on endpoint 2 8212
+	 */
+	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
+	printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
+	printf ( " BTE rx_count = %04x\n", bte->rx_count );
+#endif
+
+	endpoint_clear_rx ( ep );
+	ep_flags[RX_ENDPOINT] &= ~F_RX_BUSY;
+
+	// part of test 8
+	// count = endpoint_recv_limit ( ep, buf, 2 );
+	// printf ( "Received %d: %c\n", count, buf[0] );
+
+	if ( run_test8 )
+	    test8_start ();
+
+	// endpoint_recv_ready ( ep );
 }
+
+
+static int int_count = 0;
+static int int_first = 1;
 
 void
 usb_lp_handler ( void )
 {
         struct usb *up = USB_BASE;
 	int ep;
-	int stat;
+
+	if ( int_first && int_count++ > 2000 ) {
+	    int_first = 0;
+	    printf ( "interrupts gone crazy: %04x ep0 = %04x\n", up->isr, up->epr[0] );
+	    up->ctrl = 0;
+	}
 
 	/* This allows enumeration capture */
 	interrupt_debug ();
@@ -519,44 +621,32 @@ usb_lp_handler ( void )
 	    up->isr &= ~INT_RESET;
 	}
 
+	if ( use_P ) {
+	    printf ( "P" );
+	    P_handler ();
+	    return;
+	}
+
 	/* Correct transfer interrupt.
 	 * We handle some of these for endpoint 0
 	 * We handle all of them for other endpoints
 	 */
 	if ( up->isr & INT_CTR ) {
 	    ep = up->isr & 0xf;
+	    // endpoint_show ( ep );
+	    // usb_show ();
 
-	    stat = 0;
 	    if ( ep == 0 ) {
-		// endpoint_show ( 0 );
-		if ( my_ctr ) {
-		    stat = ctr0 ();
-		    // printf ( "-- ctr0 returns: %d\n", stat );
-		} else
-		    stat = dummy_ctr0 ();
-	    }
-
-	    if ( my_ctr && stat ) {
-		/* XXX - not really a panic, but we
-		 * stop the show for debugging.
-		 */
-		// panic ( "bad CTR\n" );
-		up->isr &= ~INT_CTR;
-		printf ( "M" );
-		return;
-	    }
-
-	    if ( ep != 0 ) {
-		// endpoint_show ( ep );
-		// usb_show ();
+		ctr0 ();
+		// printf ( "M" );
+	    } else {
 		data_ctr ();
-		up->isr &= ~INT_CTR;
-		return;
 	    }
+
+	    up->isr &= ~INT_CTR;
 	}
 
-	/* Fall through to hand off to Papoon
-	 */
+	return;
 
 #ifdef SOF_DEBUG
 	/* We see 913 SOF per second.
@@ -589,8 +679,6 @@ usb_lp_handler ( void )
 	}
 #endif
 
-	printf ( "P" );
-	P_handler ();
 }
 
 /* PMA (packet memory array) is 512 bytes of SRAM
@@ -739,6 +827,10 @@ endpoint_clear_tx ( int ep )
 
 /* Same as the above, but always marks status
  * as VALID, and it clears the CTR_RX bit
+ *
+ * Note: this will also clear the SETUP bit if
+ *  it was set.  The SETUP bit is read only,
+ *  but it is "released" when CTR_RX is cleared.
  */
 static void
 endpoint_set_rx_ready ( int ep )
@@ -1363,71 +1455,37 @@ test8_ctr ( void )
 	test8_send ();
 }
 
-static int run_test8 = 0;
-
 static void
 test8 ( void )
 {
 	run_test8 = 1;
 }
 
-// int xx_count = 0;
-
-/* Called from interrupt code on any CTR event
- * on a non-zero endpoint
- */
-static void
-data_ctr ( void )
+int
+ep_recv ( int ep, char *buf, int limit )
 {
-        struct usb *up = USB_BASE;
-	struct btable_entry *bte;
-	int ep;
-	char buf[2];
-	int count;
+	int rv;
 
-	ep = up->isr & 0xf;
+	while ( ep_flags[ep] & F_RX_BUSY )
+	    ;
 
-	//if ( xx_count++ < 10 ) {
-	//    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
-	//    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
-	//}
+	rv = endpoint_recv_limit ( ep, buf, limit );
 
-	/* If it ain't 2, it must be 3.
-	 * We only ever send data on 3.
-	 * We should clear the * CTR bit
-	 * either here or when we send new
-	 * data (we do the latter).
-	 */
-	if ( ep != 2 ) {
-	    endpoint_clear_tx ( ep );
-	    ep_flags[TX_ENDPOINT] &= ~F_TX_BUSY;
-	    if ( run_test8 )
-		test8_ctr ();
-	    return;
-	}
+	endpoint_recv_ready ( ep );
+	ep_flags[ep] |= F_RX_BUSY;
 
-#ifdef notdef
-	/* When I type a character, I see:
-	 *  Data CTR on endpoint 2 8212
-	 */
-	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
-	printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+	return rv;
+}
 
-	bte = & ((struct btable_entry *) USB_RAM) [ep];
-	printf ( " BTE rx_count = %04x\n", bte->rx_count );
-#endif
+void
+ep_send ( int ep, char *buf, int count )
+{
+	    while ( ep_flags[ep] & F_TX_BUSY )
+		;
 
-	endpoint_clear_rx ( ep );
-	ep_flags[RX_ENDPOINT] &= ~F_RX_BUSY;
+	    endpoint_send ( ep, buf, count );
 
-	// part of test 8
-	// count = endpoint_recv_limit ( ep, buf, 2 );
-	// printf ( "Received %d: %c\n", count, buf[0] );
-
-	if ( run_test8 )
-	    test8_start ();
-
-	// endpoint_recv_ready ( ep );
+	    ep_flags[ep] |= F_TX_BUSY;
 }
 
 static void
@@ -1439,18 +1497,14 @@ test10 ( void )
 
 	printf ( "Running echo demo (test10)\n" );
 
+	// XXX - should be done in an init routine
 	endpoint_recv_ready ( RX_ENDPOINT );
 	ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
 
 	for ( ;; ) {
+
 	    //printf ( "Waiting for data\n" );
-	    while ( ep_flags[RX_ENDPOINT] & F_RX_BUSY )
-		;
-
-	    count = endpoint_recv_limit ( RX_ENDPOINT, buf, 2 );
-
-	    endpoint_recv_ready ( RX_ENDPOINT );
-	    ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
+	    count = ep_recv ( RX_ENDPOINT, buf, 2 );
 
 	    // printf ( "Got data: %d\n", count );
 
@@ -1465,11 +1519,8 @@ test10 ( void )
 	    echo_count++;
 
 	    //printf ( "Waiting for xmit\n" );
-	    while ( ep_flags[TX_ENDPOINT] & F_TX_BUSY )
-		;
+	    ep_send ( TX_ENDPOINT, buf, count );
 
-	    endpoint_send ( TX_ENDPOINT, buf, 1 );
-	    ep_flags[TX_ENDPOINT] |= F_TX_BUSY;
 	}
 }
 
@@ -1565,7 +1616,6 @@ pma_show ( void )
 /* ***************************************** */
 
 static char * enum_saver ( u32, int );
-void print_buf ( char *, int );
 
 /* Called from papoon on CTR interrupts on
  * endpoint 0
@@ -1581,8 +1631,10 @@ struct enum_log_e {
 	char *data;
 };
 
+#define ENUM_LIMIT	50
+
 /* We see 36 entries */
-static struct enum_log_e e_log[50];
+static struct enum_log_e e_log[ENUM_LIMIT];
 static int e_count = 0;
 
 /* We see 363 bytes */
@@ -1608,6 +1660,9 @@ tjt_enum_logger ( int what )
 #endif
 
 	bte = &bt[0];
+
+	if ( e_count >= ENUM_LIMIT )
+	    return;
 
 	// Even printing this breaks enumeration.
 	// printf ( "enum %d\n", what );
@@ -1685,10 +1740,21 @@ enum_log_init ( void )
 void
 enum_log_watch ( void )
 {
+	int ticks = 5;
+
 	enum_log_init ();
 
-	while ( ! is_papoon_configured () )
-	    ;
+	if ( use_P ) {
+	    while ( ! is_papoon_configured () )
+		;
+	    enum_log_show ();
+	    use_P = 0;
+
+	    return;
+	}
+
+	while ( ticks-- )
+	    delay_ms ( 1000 );
 
 	enum_log_show ();
 }
