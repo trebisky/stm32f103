@@ -204,8 +204,8 @@ usb_setup ( char *buf, int count )
 	int tag;
 	int rv = 0;
 
-	printf ( "Setup packet: %d bytes -- " );
-	print_buf ( buf, count );
+	// printf ( "Setup packet: %d bytes -- " );
+	// print_buf ( buf, count );
 
 	/* Just ignore ZLP (zero length packets) */
 	if ( count == 0 )
@@ -238,38 +238,45 @@ usb_setup ( char *buf, int count )
 	return rv;
 }
 
+#define D_DESC		1
+#define D_CONFIG	2
 #define D_STRING	3
+#define D_QUAL		6
 
 static int
 get_descriptor ( struct setup *sp )
 {
 	int len;
-	int value;
+	// int value;
+	int type;
+	int index;
 
 	/* Thanks to the idiot USB business of using the 2 byte
 	 * value field to hold a 1 byte value and some other index.
 	 */
 	// value = sp->value >> 8;
-	value = sp->value;
+	// value = sp->value;
+	type = sp->value >> 8;
+	index = sp->value & 0xff;
 
-	printf ( "\nValue: %04x\n", sp->value );
-	switch ( value ) {
+	// printf ( "\nValue: %04x\n", sp->value );
+	switch ( type ) {
 
 	    /* device descriptor */
-	    case 1 << 8:
+	    case D_DESC:
 		// printf ( " reply with %d\n", sizeof(my_device_desc) );
 		endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
 		return 1;
 		// would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
 
 	    /* device qualifier */
-	    case 6 << 8:
+	    case D_QUAL:
 		printf ( "q" );
 		endpoint_send_zlp ( 0 );
 		return 1;
 
 	    /* configuration */
-	    case 2 << 8:
+	    case D_CONFIG:
 		/* This is interesting.  We have 67 bytes (64+3) to send.
 		 * But the game is even more complex.
 		 * The first request asks for 9 bytes, so we send the
@@ -299,18 +306,13 @@ get_descriptor ( struct setup *sp )
 		return 1;
 
 	    /* string - language codes */
-	    case D_STRING << 8:
-		len = sizeof (my_language_string_desc);
-		endpoint_send ( 0, my_language_string_desc, len );
-		return 1;
-	    case D_STRING << 8 | 1:
-	    case D_STRING << 8 | 2:
-	    case D_STRING << 8 | 3:
+	    case D_STRING:
 		printf ( "s" );
-		// return string_send ( value & 0xff );
-		len = string_send ( value & 0xff );
+		// return string_send ( index );
+		len = string_send ( index );
 		printf ( "%d", len );
 		return len;
+
 	    default:
 		break;
 	}
@@ -326,6 +328,7 @@ struct string_xx {
 };
 
 static u8 *my_strings[] = {
+    "---",
     "ACME computers",
     "Stupid ACM port",
     "1234"
@@ -343,8 +346,16 @@ string_send ( int index )
 	u8 *str;
 	int n;
 	int i;
+	int len;
 
 	printf ( "Index %d\n", index );
+
+	if ( index == 0 ) {
+	    len = sizeof (my_language_string_desc);
+	    endpoint_send ( 0, my_language_string_desc, len );
+	    return 1;
+	}
+
 	if ( index < 1 || index > 3 )
 	    panic ( "No such string" );
 
@@ -360,6 +371,9 @@ string_send ( int index )
 	/* 8 bit ascii to 16 bit unicode */
 	for ( i=0; i<n; i++ )
 	    xx.buf[i] = str[i];
+
+	len = 2 + 2 * n;
+	endpoint_send ( 0, (char *) &xx, len );
 
 	return 3;
 }
