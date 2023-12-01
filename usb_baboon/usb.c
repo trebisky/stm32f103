@@ -22,12 +22,7 @@
 #include "protos.h"
 
 // flag to use papoon for enumeration or not
-int use_P = 1;
-
-// set to 0 to let papoon handle
-// endpoint 0 CTR entirely
-int my_ctr = 1;
-// int my_ctr = 0;
+int use_P = 0;
 
 static int run_test8 = 0;
 static void test8_start ( void );
@@ -38,12 +33,12 @@ static void memset ( char *, int, int );
 static void force_reset ( void );
 void endpoint_show ( int );
 void usb_show ( void );
-void tjt_enum_logger ( int );
+void enum_logger ( int );
 void usb_debug ( void );
 static void usb_hw_init ( void );
 static void usb_reset ( void );
 static void pma_clear ( void );
-static void set_address ( int );
+void usb_set_address ( int );
 static void endpoint_init ( void );
 void endpoint_recv_ready ( int );
 static void pma_copy_in ( u32, char *, int );
@@ -53,6 +48,7 @@ static void endpoint_rem ( void );
 void print_buf ( char *, int );
 static void endpoint_clear_rx ( int );
 static void endpoint_clear_tx ( int );
+void endpoint_send_zlp ( int );
 
 static void data_ctr ( void );
 
@@ -218,7 +214,7 @@ usb_hw_init ( void )
 
 	endpoint_init ();
 
-	set_address ( 0 );
+	usb_set_address ( 0 );
 
 	/* Clear all interrupts */
 	// up->isr = INT_ALL;
@@ -233,18 +229,28 @@ usb_hw_init ( void )
 	up->ctrl = INT_CTR | INT_RESET;
 }
 
-/* XXX - could be inline or macro or
- * just placed inline by hand
+static int pending_address = 0;
+
+/* Called when we get a SET ADDRESS setup packet.
+ * We will save the address and actually
+ * set it when the next Tx CTR interrupt happens
  */
-static void
-set_address ( int addr )
+void
+usb_pend_address ( int addr )
+{
+	pending_address = addr;
+}
+
+void
+usb_set_address ( int addr )
 {
         struct usb *up = USB_BASE;
 
-	printf ( "USB address %d set (tjt)\n", addr );
+	// printf ( "USB address %d set (tjt)\n", addr );
+	printf ( "[%d]\n", addr );
 
 	/* also set stuff in endpoint regs ??
-	 * XXX see above, why?
+	 * XXX Papoon does, but why?
 	 */
 
 	up->daddr = DADDR_EN | (addr & 0x7f);
@@ -409,43 +415,6 @@ usb_wk_handler ( void )
 	unexpected ();
 }
 
-/* Having debug printout during enumeration
- * caused the enumeration to fail.
- * The debug switch was introduced with the
- * idea of disabling debug during enumeration,
- * then enabling it later.
- * (However most of what we are interested in
- *  is what happens during initialization, so
- *  we tend to either turn it off entirely,
- *  or enable it, allowing us to learn things,
- *  but being fully aware that enumeration
- *  will fail.
- */
-
-/* The idea here is to capture enumeration activity
- * for later analysis without disturbing anything.
- * (i.e. a passive watcher)
- */
-void
-interrupt_debug ( void )
-{
-        struct usb *up = USB_BASE;
-	int ep;
-
-	if ( up->isr & INT_RESET )
-	    tjt_enum_logger ( 2 );
-
-	if ( up->isr & INT_CTR ) {
-	    ep = up->isr & 0xf;
-	    if ( ep == 0 ) {
-		if ( up->epr[0] & EP_CTR_RX )
-		    tjt_enum_logger ( 0 );
-		if ( up->epr[0] & EP_CTR_TX )
-		    tjt_enum_logger ( 1 );
-	    }
-	}
-}
-
 static int lp_count = 0;
 
 #ifdef SOF_DEBUG
@@ -519,6 +488,16 @@ ctr0 ( void )
 	}
 
 	if ( up->epr[0] & EP_CTR_TX ) {
+
+	    /* Handle the postponed "set address"
+	     * This must be the CTR from the ZLP we sent.
+	     */
+	    if ( pending_address ) {
+		printf ( "Set pending addr: %d\n", pending_address );
+		usb_set_address ( pending_address );
+		pending_address = 0;
+	    }
+
 	    /* Send second fragment of Tx packet */
 	    if ( ep_flags[0] & F_TX_REM ) {
 		endpoint_rem ();
@@ -527,6 +506,10 @@ ctr0 ( void )
 
 	    endpoint_clear_tx ( CONTROL_ENDPOINT );
 	    ep_flags[CONTROL_ENDPOINT] &= ~F_TX_BUSY;
+
+	    // XXX - should send endless ZLP
+	    printf ( "Send tail ZLP\n" );
+	    endpoint_send_zlp ( 0 );
 
 	    printf ( "C" );
 	    // return usb_control_tx ();
@@ -571,9 +554,6 @@ data_ctr ( void )
 	}
 
 #ifdef notdef
-	/* When I type a character, I see:
-	 *  Data CTR on endpoint 2 8212
-	 */
 	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
 	printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
 
@@ -611,13 +591,21 @@ usb_lp_handler ( void )
 	}
 
 	/* This allows enumeration capture */
-	interrupt_debug ();
+	enum_handler ();
+
+	printf ( "I%04x\n", up->isr );
 
 	/* Reset interrupt.
 	 * for now, relay to papoon
+	 * Yes indeed, the reset interrupt is telling us
+	 * that the device itself has been reset and needs
+	 * to be fully initialized.
 	 */
 	if ( up->isr & INT_RESET ) {
+	    //printf ( "RESET\n" );
+	    //usb_show ();
 	    P_reset ();
+	    //usb_show ();
 	    up->isr &= ~INT_RESET;
 	}
 
@@ -1003,12 +991,15 @@ void
 endpoint_send_zlp ( int ep )
 {
 	struct btable_entry *bte;
+        struct usb *up = USB_BASE;
 
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 
 	bte->tx_count = 0;
 
+	//printf ( "zlp EPR[%d] = %04x\n", ep, up->epr[ep] );
 	endpoint_set_tx_valid ( ep );
+	// printf ( "zlp EPR[%d] = %04x\n", ep, up->epr[ep] );
 }
 
 
@@ -1202,6 +1193,21 @@ static void test6 ( void );
 static void test7 ( void );
 static void test10 ( void );
 
+void
+enum_wait ( void )
+{
+	int ticks = 5;
+
+	if ( use_P ) {
+	    while ( ! is_papoon_configured () )
+		;
+	    return;
+	}
+
+	while ( ticks-- )
+	    delay_ms ( 1000 );
+}
+
 /*
  * Starting this up is a bit problematic.
  * 1 - if we just reboot the code with the USB cable
@@ -1220,6 +1226,8 @@ usb_debug ( void )
 	// usb_show ();
 
 	// papoon_debug ();
+
+	enum_log_init ();
 
 	papoon_init ();
 
@@ -1246,7 +1254,9 @@ usb_debug ( void )
 	// papoon_debug ();
 
 	// run enumeration detailer
-	enum_log_watch ();
+	// enum_log_watch ();
+	enum_wait ();
+	enum_log_show ();
 
 #ifdef notdef
 	delay_sec ( 4 );
@@ -1610,10 +1620,63 @@ pma_show ( void )
         }
 }
 
+void
+print_buf ( char *data, int count )
+{
+	int i;
+
+	if ( count ) {
+	    printf ( " " );
+	    for ( i=0; i<count; i++ )
+		printf ( "%02x", *data++ );
+	}
+
+	printf ( "\n" );
+}
+
+#ifdef not_any_more
 /* ***************************************** */
 /* ***************************************** */
 /* Enumeration logging facility */
 /* ***************************************** */
+
+/* Having debug printout during enumeration
+ * caused the enumeration to fail.
+ * The debug switch was introduced with the
+ * idea of disabling debug during enumeration,
+ * then enabling it later.
+ * (However most of what we are interested in
+ *  is what happens during initialization, so
+ *  we tend to either turn it off entirely,
+ *  or enable it, allowing us to learn things,
+ *  but being fully aware that enumeration
+ *  will fail.
+ */
+
+/* The idea here is to capture enumeration activity
+ * for later analysis without disturbing anything.
+ * (i.e. a passive watcher)
+ */
+void
+enum_handler ( void );
+{
+        struct usb *up = USB_BASE;
+	int ep;
+
+	if ( up->isr & INT_RESET )
+	    enum_logger ( 2 );
+
+	if ( up->isr & INT_CTR ) {
+	    ep = up->isr & 0xf;
+	    if ( ep == 0 ) {
+		if ( up->epr[0] & EP_CTR_RX )
+		    enum_logger ( 0 );
+		if ( up->epr[0] & EP_CTR_TX )
+		    enum_logger ( 1 );
+	    }
+	}
+}
+
 
 static char * enum_saver ( u32, int );
 
@@ -1775,18 +1838,6 @@ enum_saver ( u32 addr, int count )
 	return rv;
 }
 
-void
-print_buf ( char *data, int count )
-{
-	int i;
-
-	if ( count ) {
-	    printf ( " " );
-	    for ( i=0; i<count; i++ )
-		printf ( "%02x", *data++ );
-	}
-
-	printf ( "\n" );
-}
+#endif
 
 /* THE END */

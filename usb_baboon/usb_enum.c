@@ -252,10 +252,9 @@ get_descriptor ( struct setup *sp )
 	int index;
 
 	/* Thanks to the idiot USB business of using the 2 byte
-	 * value field to hold a 1 byte value and some other index.
+	 * value field to hold a 1 byte value and a 1 byte index
+	 * when we are dealing with a "get descriptor"
 	 */
-	// value = sp->value >> 8;
-	// value = sp->value;
 	type = sp->value >> 8;
 	index = sp->value & 0xff;
 
@@ -265,7 +264,9 @@ get_descriptor ( struct setup *sp )
 	    /* device descriptor */
 	    case D_DESC:
 		// printf ( " reply with %d\n", sizeof(my_device_desc) );
+		// endpoint_send_zlp ( 0 );
 		endpoint_send ( 0, my_device_desc, sizeof(my_device_desc) );
+		// endpoint_send_zlp ( 0 );
 		return 1;
 		// would_send ( "device descriptor" , my_device_desc, sizeof(my_device_desc) );
 
@@ -409,6 +410,11 @@ usb_class ( struct setup *sp )
 static int
 set_address ( struct setup *sp )
 {
+	// printf ( "Set address: %d 0x%04x\n", sp->value, sp->value );
+	// We need to defer this.
+	// usb_set_address ( sp->value );
+	usb_pend_address ( sp->value );
+	endpoint_send_zlp ( 0 );
 	return 0;
 }
 
