@@ -2,6 +2,7 @@
 *.elf
 *.dump
 *.swp
+*.map
 zzz
 zz
 z

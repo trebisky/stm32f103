@@ -31,6 +31,7 @@ SECTIONS
        *(.text*)
        . = ALIGN(4);
        __text_end = .;
+       _etext = .;
    } > flash
 
    .bss  :

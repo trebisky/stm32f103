@@ -14,15 +14,20 @@ COPTS = -mcpu=cortex-m3 -mthumb -Wno-implicit-function-declaration -fno-builtin-
 #CC = $(TOOLS)-gcc $(COPTS)
 CC = $(TOOLS)-gcc $(COPTS) -O2
 
+##-Wl,-gc-sections,-Map,main.map -Wl,--cref
+
+#LDOPTS = --no-warn-rwx-segments
+LDOPTS = -no-warn-rwx-segments -Map baboon.map --cref
+
 #LD = $(TOOLS)-gcc
-LD = $(TOOLS)-ld.bfd --no-warn-rwx-segments
+LD = $(TOOLS)-ld.bfd $(LDOPTS)
 OBJCOPY = $(TOOLS)-objcopy
 DUMP = $(TOOLS)-objdump -d
 GDB = $(TOOLS)-gdb
 
 #OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
 #OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
-OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o usb_enum.o usb_watch.o papoon.o
+OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o kyulib.o serial.o timer.o usb.o usb_enum.o usb_watch.o papoon.o
 
 all: baboon.elf baboon.dump tags
 
@@ -39,6 +44,7 @@ baboon.bin:	baboon.elf
 
 baboon.elf: 	$(OBJS)
 	$(LD) -T baboon.lds -o baboon.elf $(OBJS)
+	size baboon.elf
 
 locore.o:	locore.s
 	$(AS) locore.s -o locore.o

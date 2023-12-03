@@ -29,7 +29,9 @@ static void test8_start ( void );
 static void test8_ctr ( void );
 
 /* local Prototypes */
-static void memset ( char *, int, int );
+void memset ( char *, int, int );
+int strlen ( char * );
+
 static void force_reset ( void );
 void endpoint_show ( int );
 void usb_show ( void );
@@ -1049,6 +1051,8 @@ endpoint_recv_ready ( int ep )
 	endpoint_set_rx_ready ( ep );
 }
 
+#ifdef notdef
+// These are in kyulib
 /* Quick and dirty.
  * could be in a library somewhere, but it isn't
  */
@@ -1073,7 +1077,7 @@ strlen ( char *x )
 
 	return rv;
 }
-
+#endif
 
 #ifdef notdef
 /* Not useful */

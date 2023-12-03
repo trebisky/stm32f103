@@ -161,20 +161,27 @@ startup ( void )
 	int t;
 	unsigned long systick_next;
 
+	mem_init ();
+
 	rcc_init ();
 
 	serial_init ();
+	// serial_basic ();
+
 	printf ( " -- Booting ------------------------------\n" );
 	printf ( "STM32 usb_baboon demo starting\n" );
 
-	mem_init ();
+	printf ( "AA\n" );	// nope
 
 	// usb_init ();
 
 	led_init ();
+	printf ( "AA\n" );	// nope
 
 	// Just USB stuff at this time
 	gpio_init ();
+
+	printf ( "AA\n" );	// nope
 
 	led_on ();
 	// led_off ();

@@ -15,6 +15,7 @@ extern unsigned int __bss_end;
 /* Now startup() is in main.c and calls this.
  * I do this so I can initialize the uart early
  * and then do printf from in here.
+ * Using printf() in here is no longer possible !!
  */
 void
 mem_init ( void )
@@ -23,13 +24,18 @@ mem_init ( void )
 	unsigned int *p;
 	int count;
 
+	// printf ( "Bss: %08x\n", &__bss_start );
+	// printf ( "Bss: %08x\n", &__bss_end );
+	// printf ( "P  : %08x\n", &p );
+
 	/* Zero BSS */
 	for ( p = &__bss_start; p < &__bss_end; p++ )
 	    *p = 0;
 
 	count = &__bss_end - &__bss_start;
 	count--;
-	printf ( "%d bytes of BSS cleared\n", count );
+
+	// printf ( "%d bytes of BSS cleared\n", count );
 
 	// init_vars ();
 
@@ -39,7 +45,8 @@ mem_init ( void )
 
 	count = &__data_end - &__data_start;
 	count--;
-	printf ( "%d bytes of Data initialized\n", count );
+
+	// printf ( "%d bytes of Data initialized\n", count );
 }
 
 #ifdef notdef

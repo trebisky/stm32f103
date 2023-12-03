@@ -63,7 +63,7 @@
 .word	bogus		/* IRQ 34 */
 .word	bogus		/* IRQ 35 */
 .word	bogus		/* IRQ 36 */
-.word	bogus		/* IRQ 37 -- UART 1 */
+.word	uart1_handler	/* IRQ 37 -- UART 1 */
 .word	bogus		/* IRQ 38 -- UART 2 */
 .word	bogus		/* IRQ 39 -- UART 3 */
 .word	bogus		/* IRQ 40 */
