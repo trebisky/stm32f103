@@ -507,7 +507,7 @@ void UsbDev::reset()
         set_address(IMPOSSIBLE_DEV_ADDR);
 
     _device_state = DeviceState::RESET;
-    printf ( "Device is now reset\n" );
+    // printf ( "Device is now reset\n" );
 
 }  // reset()
 
@@ -963,7 +963,7 @@ const uint8_t   address)
     usb->daddr = Usb::Daddr::add(address) | Usb::Daddr::EF;
 
     _device_state = DeviceState::ADDRESSED;
-    printf ( "Device is now addressed (papoon) to %d\n", address );
+    // printf ( "Device is now addressed (papoon) to %d\n", address );
 
 }  // set_address()
 

@@ -249,13 +249,18 @@ usb_set_address ( int addr )
         struct usb *up = USB_BASE;
 
 	// printf ( "USB address %d set (tjt)\n", addr );
-	printf ( "[%d]\n", addr );
+	// printf ( "[%d]\n", addr );
 
 	/* also set stuff in endpoint regs ??
 	 * XXX Papoon does, but why?
 	 */
 
+
 	up->daddr = DADDR_EN | (addr & 0x7f);
+
+	// Looks correct 40005c4c and 00D3 for address 0x53
+	// printf ( "daddr at %08x\n", &up->daddr );
+	// printf ( "daddr value: %08x\n", up->daddr );
 }
 
 /* We have 8 endpoint registers.
@@ -480,10 +485,10 @@ ctr0 ( void )
 	    // print_buf ( buf, count );
 
 	    if ( setup ) {
-		printf ( "A" );
+		//printf ( "A" );
 		rv = usb_setup ( buf, count );
 	    } else {
-		printf ( "B" );
+		//printf ( "B" );
 		rv = usb_control ( buf, count );
 	    }
 	    // return;
@@ -495,7 +500,7 @@ ctr0 ( void )
 	     * This must be the CTR from the ZLP we sent.
 	     */
 	    if ( pending_address ) {
-		printf ( "Set pending addr: %d\n", pending_address );
+		// printf ( "Set pending addr: %d\n", pending_address );
 		usb_set_address ( pending_address );
 		pending_address = 0;
 	    }
@@ -510,10 +515,10 @@ ctr0 ( void )
 	    ep_flags[CONTROL_ENDPOINT] &= ~F_TX_BUSY;
 
 	    // XXX - should send endless ZLP
-	    printf ( "Send tail ZLP\n" );
-	    endpoint_send_zlp ( 0 );
+	    // printf ( "Send tail ZLP\n" );
+	    // endpoint_send_zlp ( 0 );
 
-	    printf ( "C" );
+	    // printf ( "C" );
 	    // return usb_control_tx ();
 	}
 
@@ -595,7 +600,7 @@ usb_lp_handler ( void )
 	/* This allows enumeration capture */
 	enum_handler ();
 
-	printf ( "I%04x\n", up->isr );
+	// printf ( "I%04x\n", up->isr );
 
 	/* Reset interrupt.
 	 * for now, relay to papoon
@@ -909,7 +914,7 @@ endpoint_rem ( void )
 {
 	struct btable_entry *bte;
 
-	printf ( "%" );
+	// printf ( "%" );
 	bte = & ((struct btable_entry *) USB_RAM) [0];
 
 	bte->tx_count = tx_rem_count;

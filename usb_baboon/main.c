@@ -171,17 +171,10 @@ startup ( void )
 	printf ( " -- Booting ------------------------------\n" );
 	printf ( "STM32 usb_baboon demo starting\n" );
 
-	printf ( "AA\n" );	// nope
-
-	// usb_init ();
-
 	led_init ();
-	printf ( "AA\n" );	// nope
 
 	// Just USB stuff at this time
 	gpio_init ();
-
-	printf ( "AA\n" );	// nope
 
 	led_on ();
 	// led_off ();
