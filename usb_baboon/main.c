@@ -186,16 +186,14 @@ startup ( void )
 
 	printf ( "STM32 usb_baboon demo\n" );
 
-#ifdef notdef
-	big_delay ();
-	big_delay ();
-	pma_show ();
-#endif
-
-	/* usb_init generally doesn't return */
 	usb_init ();
 
-	printf ( "Delay 10\n" );
+	/* Run various tests.
+	 * - usually does not return.
+	 */
+	usb_debug ();
+
+	printf ( "Delay 10 seconds\n" );
 	delay_sec ( 10 );
 
 	serial_puts ( "Main is blinking\n" );

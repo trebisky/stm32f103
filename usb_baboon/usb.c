@@ -22,7 +22,7 @@
 #include "protos.h"
 
 // flag to use papoon for enumeration or not
-int use_P = 0;
+// int use_P = 0;
 
 static int run_test8 = 0;
 static void test8_start ( void );
@@ -48,6 +48,8 @@ static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
 static void endpoint_rem ( void );
 void print_buf ( char *, int );
+static void endpoint_set_rx_ready ( int );
+static void endpoint_set_tx_nak ( int );
 static void endpoint_clear_rx ( int );
 static void endpoint_clear_tx ( int );
 void endpoint_send_zlp ( int );
@@ -56,6 +58,40 @@ static void data_ctr ( void );
 
 #define USB_BASE        (struct usb *) 0x40005C00
 #define USB_RAM         (u32 *) 0x40006000
+
+#ifdef notdef
+/* From Daed */
+extern union {
+    struct {
+        volatile uint32_t ADDR_TX;  // in units of uint16, always even
+        volatile uint32_t COUNT_TX;
+        volatile uint32_t ADDR_RX;
+        volatile uint32_t COUNT_RX;
+    } btable[8];  // located here by virtue of USB.BTABLE being zero
+    uint16_t buf[512]; // interspersed, 2 bytes data, 2 bytes reserved, only accessible as uint16 or uint32
+} USB_PMA; // @ 0x50006000
+#endif
+
+/* An experiment.
+ * The addresses are defined in the lds file
+ */
+struct pma_buf {
+	u32 buf[32];
+};
+
+/* 4 * 4 bytes = 16 bytes in ARM addr space.
+ */
+struct btable_entry {
+	u32	tx_addr;
+	u32	tx_count;
+	u32	rx_addr;
+	u32	rx_count;
+};
+
+extern struct pma_buf PMA_buf[8];
+extern struct btable_entry PMA_btable[8];
+
+/* End of experiment */
 
 /* 8 endpoint "pairs"  are allowed */
 #define NUM_EP          8
@@ -145,21 +181,6 @@ struct usb {
 
 #define EP_ADDR		0xf	// 4 bits
 
-/* 4 * 4 bytes = 16 bytes in ARM addr space.
- */
-struct btable_entry {
-	u32	tx_addr;
-	u32	tx_count;
-	u32	rx_addr;
-	u32	rx_count;
-};
-
-volatile static u8	ep_flags[NUM_EP];
-
-#define	F_RX_BUSY	0x01
-#define	F_TX_BUSY	0x02
-#define	F_TX_REM	0x80
-
 /* =================================== */
 
 #define USB_HP_IRQ	19
@@ -167,100 +188,36 @@ volatile static u8	ep_flags[NUM_EP];
 #define USB_WK_IRQ	42
 
 /* =================================== */
-/* Correct for the CDC-ACM device */
 
-#define CONTROL_ENDPOINT	0
-#define RX_ENDPOINT		2
-#define TX_ENDPOINT		3
+// #define CONTROL_ENDPOINT	0
+// #define DATA_ENDPOINT		1
+
+#define EP_CONTROL	0
+#define EP_DATA		1
 
 /* ====================================================== */
 /* ====================================================== */
 /* section 2 - essential driver code */
 /* ====================================================== */
 
+struct endpoint {
+	u8	flags;
+	u32	*tx_buf;
+	u32	*rx_buf;
+};
+
+#define	F_RX_BUSY	0x01
+#define	F_TX_BUSY	0x02
+#define	F_TX_REM	0x80
+
+struct endpoint ep_info[NUM_EP];
+
 void
 usb_init ( void )
 {
 	usb_hw_init ();
 	usb_reset ();
-
-	usb_debug ();
-}
-
-/* Called both during initialization and
- * during a USB reset event.
- */
-static void
-usb_reset ( void )
-{
-	int i;
-
-	for ( i=0; i<NUM_EP; i++ )
-	    ep_flags[i] = 0;
-}
-
-static void
-usb_hw_init ( void )
-{
-        struct usb *up = USB_BASE;
-
-	// No interrupts
-	up->ctrl = 0;
-
-	/* We only ever see LP interrupts */
-	nvic_enable ( USB_HP_IRQ );
-	nvic_enable ( USB_LP_IRQ );
-	nvic_enable ( USB_WK_IRQ );
-
-	pma_clear ();
-
-	endpoint_init ();
-
-	usb_set_address ( 0 );
-
-	/* Clear all interrupts */
-	// up->isr = INT_ALL;
-	up->isr = 0;
-
 	printf ( "TJT usb init done\n" );
-	printf ( "  ===============\n" );
-	printf ( "  ===============\n" );
-	printf ( "TJT enable ints\n" );
-
-	/* Enable just these two */
-	up->ctrl = INT_CTR | INT_RESET;
-}
-
-static int pending_address = 0;
-
-/* Called when we get a SET ADDRESS setup packet.
- * We will save the address and actually
- * set it when the next Tx CTR interrupt happens
- */
-void
-usb_pend_address ( int addr )
-{
-	pending_address = addr;
-}
-
-void
-usb_set_address ( int addr )
-{
-        struct usb *up = USB_BASE;
-
-	// printf ( "USB address %d set (tjt)\n", addr );
-	// printf ( "[%d]\n", addr );
-
-	/* also set stuff in endpoint regs ??
-	 * XXX Papoon does, but why?
-	 */
-
-
-	up->daddr = DADDR_EN | (addr & 0x7f);
-
-	// Looks correct 40005c4c and 00D3 for address 0x53
-	// printf ( "daddr at %08x\n", &up->daddr );
-	// printf ( "daddr value: %08x\n", up->daddr );
 }
 
 /* We have 8 endpoint registers.
@@ -330,6 +287,7 @@ usb_set_address ( int addr )
 // This yields 0x8400 for 64 byte buffers
 #define BT_64		(BT_CLICK_32 | 1<<10)
 
+#ifdef OLD_PAPOON
 static void
 endpoint_init ( void )
 {
@@ -384,6 +342,176 @@ endpoint_init ( void )
 
 	/* Toggle NAK to VALID */
 	up->epr[0] = EP_RX_NAK_VALID;
+}
+#endif
+
+#ifdef notdef
+/* Daed */
+inline void usb_ep_reset(uint8_t ep) {
+        USB.EPR[ep & 0x7f] = USB.EPR[ep & 0x7f] & (USB_EPRx_DTOG_RX|USB_EPRx_STAT_RX|USB_EPRx_DTOG_TX|USB_EPRx_STAT_TX);
+}
+inline void usb_ep_set_rx_size(int ep, uint16_t size) {
+        if (size < 62) {
+                USB_PMA.btable[ep].COUNT_RX = (size/2) << 10;
+        } else {
+                USB_PMA.btable[ep].COUNT_RX = (((size/32)-1) << 10) | USB_PMA_COUNT_BLSIZE;
+        }
+}
+
+
+ _usb_state = USB_UNATTACHED;
+
+    for (int i = 0; i < 8; ++i) {
+        usb_ep_reset(i);
+    }
+
+    // 512 bytes in USB_PMA
+    // btable: 8 * 4 * 2 = 64 bytes, in ADDR_xX units
+    USB_PMA.btable[0].ADDR_TX = 1 * 64; // control endpoint 0x00/0x80
+    USB_PMA.btable[0].ADDR_RX = 2 * 64;
+
+    usb_ep_set_rx_size(0, 64);
+
+    USB_PMA.btable[1].ADDR_TX = 3 * 64; // bulk endpoint 0x01/0x81
+    USB_PMA.btable[1].ADDR_RX = 4 * 64;
+
+    usb_ep_set_rx_size(1, 64);
+
+RESET -----------------------
+        USB.ISTR &= ~(USB_ISTR_RESET | USB_ISTR_WKUP | USB_ISTR_SUSP);
+        USB.CNTR &= ~(USB_CNTR_RESUME | USB_CNTR_FSUSP | USB_CNTR_LPMODE | USB_CNTR_PDWN | USB_CNTR_FRES);
+
+        usb_ep_config(0, USB_EP_TYPE_CONTROL, 0);
+        usb_ep_set_stat_tx(0, USB_EP_STAT_STALL); // only setup will succeed
+        usb_ep_set_stat_rx(0, USB_EP_STAT_STALL);
+
+        for (int i = 1; i < 8; ++i) {
+            usb_ep_reset(i);
+        }
+
+        usb_daddr_set_add(0);
+        USB.DADDR |= USB_DADDR_EF;
+
+        _usb_state = USB_DEFAULT;
+        return 0;
+
+#endif
+
+/* Called both during initialization and
+ * during a USB reset event.
+ */
+static void
+usb_reset ( void )
+{
+	endpoint_init ();
+
+	usb_set_address ( 0 );
+}
+
+/* Which btable buffer is used for what
+ */
+#define EP0_TX_BUF_INDEX	1
+#define EP0_RX_BUF_INDEX	2
+#define EP1_TX_BUF_INDEX	3
+#define EP1_RX_BUF_INDEX	4
+
+static void
+endpoint_init ( void )
+{
+        struct usb *up = USB_BASE;
+	int ep;
+
+	for ( ep=0; ep < NUM_EP; ep++ )
+	    up->epr[ep] = 0;
+
+	up->epr[EP_CONTROL] = EP_TYPE_CONTROL | 0;
+	up->epr[EP_DATA] = EP_TYPE_BULK | 1;
+
+	PMA_btable[EP_CONTROL].tx_addr = EP0_TX_BUF_INDEX * 64;
+	PMA_btable[EP_CONTROL].tx_count = 0;
+	PMA_btable[EP_CONTROL].rx_addr = EP0_RX_BUF_INDEX * 64;
+	PMA_btable[EP_CONTROL].rx_count = BT_64;
+
+	endpoint_set_rx_ready ( EP_CONTROL );
+	endpoint_set_tx_nak ( EP_CONTROL );
+
+	PMA_btable[EP_DATA].tx_addr = EP1_TX_BUF_INDEX * 64;
+	PMA_btable[EP_DATA].tx_count = 0;
+	PMA_btable[EP_DATA].rx_addr = EP1_RX_BUF_INDEX * 64;
+	PMA_btable[EP_DATA].rx_count = BT_64;
+
+	endpoint_set_rx_ready ( EP_DATA );
+	endpoint_set_tx_nak ( EP_DATA );
+
+	ep_info[EP_CONTROL].tx_buf = PMA_buf[1].buf;
+	ep_info[EP_CONTROL].rx_buf = PMA_buf[2].buf;
+	ep_info[EP_CONTROL].flags = 0;
+
+	ep_info[EP_DATA].tx_buf = PMA_buf[3].buf;
+	ep_info[EP_DATA].rx_buf = PMA_buf[4].buf;
+	ep_info[EP_DATA].flags = 0;
+}
+
+static void
+usb_hw_init ( void )
+{
+        struct usb *up = USB_BASE;
+
+	up->ctrl = 0;
+	up->isr = 0;
+	up->daddr = 0;
+	up->btable = 0;
+
+	/* We only ever see LP interrupts */
+	nvic_enable ( USB_HP_IRQ );
+	nvic_enable ( USB_LP_IRQ );
+	nvic_enable ( USB_WK_IRQ );
+
+	pma_clear ();
+
+	endpoint_init ();
+
+	usb_set_address ( 0 );
+
+	// printf ( "TJT usb init done\n" );
+	// printf ( "  ===============\n" );
+	// printf ( "  ===============\n" );
+	// printf ( "TJT enable ints\n" );
+
+	/* Enable just these two interrupts */
+	up->ctrl = INT_CTR | INT_RESET;
+}
+
+static int pending_address = 0;
+
+/* Called when we get a SET ADDRESS setup packet.
+ * We will save the address and actually
+ * set it when the next Tx CTR interrupt happens
+ */
+void
+usb_pend_address ( int addr )
+{
+	pending_address = addr;
+}
+
+void
+usb_set_address ( int addr )
+{
+        struct usb *up = USB_BASE;
+
+	// printf ( "USB address %d set (tjt)\n", addr );
+	// printf ( "[%d]\n", addr );
+
+	/* also set stuff in endpoint regs ??
+	 * XXX Papoon does, but why?
+	 */
+
+
+	up->daddr = DADDR_EN | (addr & 0x7f);
+
+	// Looks correct 40005c4c and 00D3 for address 0x53
+	// printf ( "daddr at %08x\n", &up->daddr );
+	// printf ( "daddr value: %08x\n", up->daddr );
 }
 
 static void
@@ -462,10 +590,11 @@ ctr0 ( void )
 	// printf ( "CTR on endpoint %d %04x\n", 0, up->isr );
 	// printf ( " EPR[%d] = %04x\n", 0, up->epr[0] );
 
-	if ( up->epr[0] & EP_CTR_RX ) {
+	if ( up->epr[EP_CONTROL] & EP_CTR_RX ) {
 
 	    /* do we really need this check ? */
-	    bte = & ((struct btable_entry *) USB_RAM) [0];
+	    // bte = & ((struct btable_entry *) USB_RAM) [0];
+	    bte = & PMA_btable[EP_CONTROL];
 	    count = bte->rx_count & 0x3ff;
 	    if ( count > SETUP_BUF ) {
 		printf ( "Setup too big: %d\n", count );
@@ -476,10 +605,10 @@ ctr0 ( void )
 	     * CTR_RX, as clearling CTR_RX will also clear
 	     * SETUP if it is set.
 	     */
-	    setup = up->epr[0] & EP_SETUP;
+	    setup = up->epr[EP_CONTROL] & EP_SETUP;
 
-	    count = endpoint_recv ( CONTROL_ENDPOINT, buf );
-	    endpoint_recv_ready ( CONTROL_ENDPOINT );
+	    count = endpoint_recv ( EP_CONTROL, buf );
+	    endpoint_recv_ready ( EP_CONTROL );
 
 	    // printf ( "Read %d bytes from EP 0", count );
 	    // print_buf ( buf, count );
@@ -494,7 +623,7 @@ ctr0 ( void )
 	    // return;
 	}
 
-	if ( up->epr[0] & EP_CTR_TX ) {
+	if ( up->epr[EP_CONTROL] & EP_CTR_TX ) {
 
 	    /* Handle the postponed "set address"
 	     * This must be the CTR from the ZLP we sent.
@@ -506,13 +635,13 @@ ctr0 ( void )
 	    }
 
 	    /* Send second fragment of Tx packet */
-	    if ( ep_flags[0] & F_TX_REM ) {
+	    if ( ep_info[EP_CONTROL].flags & F_TX_REM ) {
 		endpoint_rem ();
 		return;
 	    }
 
-	    endpoint_clear_tx ( CONTROL_ENDPOINT );
-	    ep_flags[CONTROL_ENDPOINT] &= ~F_TX_BUSY;
+	    endpoint_clear_tx ( EP_CONTROL );
+	    ep_info[EP_CONTROL].flags &= ~F_TX_BUSY;
 
 	    // XXX - should send endless ZLP
 	    // printf ( "Send tail ZLP\n" );
@@ -554,7 +683,7 @@ data_ctr ( void )
 	 */
 	if ( ep != 2 ) {
 	    endpoint_clear_tx ( ep );
-	    ep_flags[TX_ENDPOINT] &= ~F_TX_BUSY;
+	    ep_info[EP_DATA].flags &= ~F_TX_BUSY;
 	    if ( run_test8 )
 		test8_ctr ();
 	    return;
@@ -569,7 +698,7 @@ data_ctr ( void )
 #endif
 
 	endpoint_clear_rx ( ep );
-	ep_flags[RX_ENDPOINT] &= ~F_RX_BUSY;
+	ep_info[EP_DATA].flags &= ~F_RX_BUSY;
 
 	// part of test 8
 	// count = endpoint_recv_limit ( ep, buf, 2 );
@@ -603,24 +732,27 @@ usb_lp_handler ( void )
 	// printf ( "I%04x\n", up->isr );
 
 	/* Reset interrupt.
-	 * for now, relay to papoon
+	 * for now, just relay to papoon
 	 * Yes indeed, the reset interrupt is telling us
 	 * that the device itself has been reset and needs
 	 * to be fully initialized.
 	 */
 	if ( up->isr & INT_RESET ) {
-	    //printf ( "RESET\n" );
+	    // printf ( " -- RESET\n" );
+	    // usb_show ();
+	    // P_reset ();
 	    //usb_show ();
-	    P_reset ();
-	    //usb_show ();
+	    usb_reset ();
 	    up->isr &= ~INT_RESET;
 	}
 
+#ifdef notdef
 	if ( use_P ) {
 	    printf ( "P" );
 	    P_handler ();
 	    return;
 	}
+#endif
 
 	/* Correct transfer interrupt.
 	 * We handle some of these for endpoint 0
@@ -899,6 +1031,28 @@ endpoint_set_tx_valid ( int ep )
 	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
 }
 
+static void
+endpoint_set_tx_nak ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+	// printf ( "Set tx in: %04x\n", val );
+
+	/* Make sure these bits are not changed */
+	// clear CTR_TX, leave CTR_RX unchanged.
+	val &= ~EP_CTR_TX;
+	val |= EP_CTR_RX;
+	val &= ~ EP_TOGGLE_TX;
+
+	/* flip these to get desired status */
+	val ^= EP_TX_NAK;
+
+	up->epr[ep] = val;
+	// printf ( "Set tx out: %04x --> %04x\n", val, up->epr[ep] );
+}
+
 #define ENDPOINT_LIMIT	64
 
 /* This crazy business is only set up to work on endpoint 0
@@ -919,8 +1073,8 @@ endpoint_rem ( void )
 
 	bte->tx_count = tx_rem_count;
 	pma_copy_out ( bte->tx_addr, tx_rem, tx_rem_count );
-	endpoint_set_tx_valid ( 0 );
-	ep_flags[0] &= ~F_TX_REM;
+	endpoint_set_tx_valid ( EP_CONTROL );
+	ep_info[EP_CONTROL].flags &= ~F_TX_REM;
 }
 
 /* send data on an endpoint */
@@ -955,7 +1109,7 @@ endpoint_send ( int ep, char *buf, int count )
 
 	tx_rem = &buf[ENDPOINT_LIMIT];
 	tx_rem_count = count - ENDPOINT_LIMIT;
-	ep_flags[ep] |= F_TX_REM;
+	ep_info[ep].flags |= F_TX_REM;
 
 	bte->tx_count = ENDPOINT_LIMIT;
 	pma_copy_out ( bte->tx_addr, buf, ENDPOINT_LIMIT );
@@ -1105,6 +1259,7 @@ force_reset ( void )
 /* section XXX - odds and ends */
 /* ====================================================== */
 
+#ifdef notdef
 /* Tested 11-7-2023 */
 void
 usb_putc ( int cc )
@@ -1114,7 +1269,7 @@ usb_putc ( int cc )
 
 static int puts_count = 0;
 
-#ifdef notdef
+#ifdef not_ever
 void
 usb_puts ( char *msg )
 {
@@ -1132,13 +1287,15 @@ usb_puts ( char *msg )
 	while ( *msg )
 	    papoon_putc ( *msg++ );
 }
+#endif
 
 /* ===================================================== */
 
-/* Papoon code (that will go away someday?)
+/* Papoon dependent code (that will go away someday?)
  * mostly below here.
  */
 
+#ifdef notdef
 /* This is what I use to manage an endpoint pair
  */
 struct endpoint {
@@ -1191,6 +1348,7 @@ tom_putc ( int cc )
 
 	// up->epr[2] = xxx;
 }
+#endif
 
 /* ====================================================== */
 /* ====================================================== */
@@ -1207,11 +1365,13 @@ enum_wait ( void )
 {
 	int ticks = 5;
 
+#ifdef notdef
 	if ( use_P ) {
 	    while ( ! is_papoon_configured () )
 		;
 	    return;
 	}
+#endif
 
 	while ( ticks-- )
 	    delay_ms ( 1000 );
@@ -1238,7 +1398,7 @@ usb_debug ( void )
 
 	enum_log_init ();
 
-	papoon_init ();
+	// papoon_init ();
 
 	//printf ( "USB spins\n" );
 	//for ( ;; ) ;
@@ -1283,6 +1443,8 @@ usb_debug ( void )
 	// test 8 and 9 just spin while
 	// all the action is driven by
 	// interrupts
+
+	// usb_show ();
 
 	/* echo test */
 	test10 ();
@@ -1485,13 +1647,13 @@ ep_recv ( int ep, char *buf, int limit )
 {
 	int rv;
 
-	while ( ep_flags[ep] & F_RX_BUSY )
+	while ( ep_info[ep].flags & F_RX_BUSY )
 	    ;
 
 	rv = endpoint_recv_limit ( ep, buf, limit );
 
 	endpoint_recv_ready ( ep );
-	ep_flags[ep] |= F_RX_BUSY;
+	ep_info[ep].flags |= F_RX_BUSY;
 
 	return rv;
 }
@@ -1499,12 +1661,12 @@ ep_recv ( int ep, char *buf, int limit )
 void
 ep_send ( int ep, char *buf, int count )
 {
-	    while ( ep_flags[ep] & F_TX_BUSY )
+	while ( ep_info[ep].flags & F_TX_BUSY )
 		;
 
-	    endpoint_send ( ep, buf, count );
+	endpoint_send ( ep, buf, count );
 
-	    ep_flags[ep] |= F_TX_BUSY;
+	ep_info[ep].flags |= F_TX_BUSY;
 }
 
 static void
@@ -1517,13 +1679,13 @@ test10 ( void )
 	printf ( "Running echo demo (test10)\n" );
 
 	// XXX - should be done in an init routine
-	endpoint_recv_ready ( RX_ENDPOINT );
-	ep_flags[RX_ENDPOINT] |= F_RX_BUSY;
+	endpoint_recv_ready ( EP_DATA );
+	ep_info[EP_DATA].flags |= F_RX_BUSY;
 
 	for ( ;; ) {
 
 	    //printf ( "Waiting for data\n" );
-	    count = ep_recv ( RX_ENDPOINT, buf, 2 );
+	    count = ep_recv ( EP_DATA, buf, 2 );
 
 	    // printf ( "Got data: %d\n", count );
 
@@ -1538,25 +1700,17 @@ test10 ( void )
 	    echo_count++;
 
 	    //printf ( "Waiting for xmit\n" );
-	    ep_send ( TX_ENDPOINT, buf, count );
+	    ep_send ( EP_DATA, buf, count );
 
 	}
 }
 
-/* Display stuff for a specific endpoint pair
- */
 void
-endpoint_show ( int ep )
+ep_btable_show ( int ep )
 {
 	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
 	struct btable_entry *bte;
-        struct usb *up = USB_BASE;
 	char *buf;
-
-	if ( up->epr[ep] == 0 )
-	    return;
-
-	printf ( "Endpoint %d: EPR = %04x\n", ep, up->epr[ep] );
 
 	bte = &bt[ep];
 	printf ( "BTE ep-%d @ %08x\n", ep, bte );
@@ -1567,6 +1721,21 @@ endpoint_show ( int ep )
 	buf = (char *) USB_RAM + 2 * bte->rx_addr;
 	printf ( "BTE, ep-%d rx addr  = %04x - %08x\n", ep, bte->rx_addr, buf );
 	printf ( "BTE, ep-%d rx count = %04x\n", ep, bte->rx_count );
+}
+
+/* Display stuff for a specific endpoint pair
+ */
+void
+endpoint_show ( int ep )
+{
+        struct usb *up = USB_BASE;
+
+	if ( up->epr[ep] == 0 )
+	    return;
+
+	printf ( "Endpoint %d: EPR = %04x\n", ep, up->epr[ep] );
+	ep_btable_show ( ep );
+
 }
 
 /* Display entire btable and all endpoints
@@ -1602,6 +1771,7 @@ usb_show ( void )
         printf ( "EPR-3 = %04x\n", up->epr[3] );
 
 	btable_show ();
+	ep_btable_show ( 0 );
 }
 
 /* Dump the above AND the entire PMA area.
@@ -1642,211 +1812,5 @@ print_buf ( char *data, int count )
 
 	printf ( "\n" );
 }
-
-#ifdef not_any_more
-/* ***************************************** */
-/* ***************************************** */
-/* Enumeration logging facility */
-/* ***************************************** */
-
-/* Having debug printout during enumeration
- * caused the enumeration to fail.
- * The debug switch was introduced with the
- * idea of disabling debug during enumeration,
- * then enabling it later.
- * (However most of what we are interested in
- *  is what happens during initialization, so
- *  we tend to either turn it off entirely,
- *  or enable it, allowing us to learn things,
- *  but being fully aware that enumeration
- *  will fail.
- */
-
-/* The idea here is to capture enumeration activity
- * for later analysis without disturbing anything.
- * (i.e. a passive watcher)
- */
-void
-enum_handler ( void );
-{
-        struct usb *up = USB_BASE;
-	int ep;
-
-	if ( up->isr & INT_RESET )
-	    enum_logger ( 2 );
-
-	if ( up->isr & INT_CTR ) {
-	    ep = up->isr & 0xf;
-	    if ( ep == 0 ) {
-		if ( up->epr[0] & EP_CTR_RX )
-		    enum_logger ( 0 );
-		if ( up->epr[0] & EP_CTR_TX )
-		    enum_logger ( 1 );
-	    }
-	}
-}
-
-
-static char * enum_saver ( u32, int );
-
-/* Called from papoon on CTR interrupts on
- * endpoint 0
- * what = 0 is Rx, 1 is Tx
- */
-
-struct enum_log_e {
-	int what;
-	int count;
-	// u32 addr;
-	u32 istr;
-	u32 epr;
-	char *data;
-};
-
-#define ENUM_LIMIT	50
-
-/* We see 36 entries */
-static struct enum_log_e e_log[ENUM_LIMIT];
-static int e_count = 0;
-
-/* We see 363 bytes */
-#define SAVE_SIZE	400
-
-static char save_buf[SAVE_SIZE];
-static int s_count = 0;
-
-void
-tjt_enum_logger ( int what )
-{
-	struct enum_log_e *ep;
-	struct btable_entry *bt = (struct btable_entry *) USB_RAM;
-	struct btable_entry *bte;
-	static int first = 0;
-
-        struct usb *up = USB_BASE;
-	u32 addr = (u32) USB_RAM;
-
-#ifdef notdef
-	if ( first && what != 2 )
-	    pma_show ();
-#endif
-
-	bte = &bt[0];
-
-	if ( e_count >= ENUM_LIMIT )
-	    return;
-
-	// Even printing this breaks enumeration.
-	// printf ( "enum %d\n", what );
-
-	ep = &e_log[e_count];
-	ep->what = what;
-	ep->count = 0;
-	ep->istr = up->isr;
-	ep->epr = up->epr[0];
-
-	if ( what == 1 ) {	// Tx
-	    ep->count = bte->tx_count;
-	    //ep->addr = addr + 2 * bte->tx_addr;
-	    ep->data = enum_saver ( bte->tx_addr, bte->tx_count );
-	}
-
-	if ( what == 0 ) {	// Rx
-	    ep->count = bte->rx_count & 0x3ff;
-	    // ep->addr = addr + 2 * bte->rx_addr;
-	    ep->data = enum_saver ( bte->rx_addr, bte->rx_count );
-	}
-
-#ifdef notdef
-	if ( first && what != 2 ) {
-	    printf ( "buf (%d): ", ep->count );
-	    print_buf ( ep->data, ep->count );
-	    printf ( "\n" );
-	    first = 0;
-	}
-#endif
-
-	e_count++;
-}
-
-void
-enum_log_show ( void )
-{
-	int i;
-	struct enum_log_e *ep;
-	char *wstr;
-	char *sstr;
-
-	// printf ( "Log entries: %d\n", e_count );
-
-	for ( i=0; i<e_count; i++ ) {
-	    ep = &e_log[i];
-	    if ( ep->what == 2 ) {
-		printf ( "%3d Enum Reset\n", i );
-		continue;
-	    }
-
-	    wstr = ep->what == 1 ? "Tx" : "Rx";
-	    sstr = ep->epr & EP_SETUP ? "S" : " ";
-
-	    // printf ( "%3d Enum %s %2d %08x", i, wstr, ep->count, ep->addr );
-	    // printf ( "%3d Enum %s %s %04x %2d %08x", i, wstr, sstr, ep->epr, ep->count, ep->addr );
-	    printf ( "%3d Enum %s %s %04x %04x %2d", i, wstr, sstr, ep->istr, ep->epr, ep->count );
-	    print_buf ( ep->data, ep->count );
-	}
-
-	printf ( "Total bytes saved: %d\n", s_count );
-}
-
-void
-enum_log_init ( void )
-{
-	e_count = 0;
-	s_count = 0;
-	memset ( save_buf, 0xaa, SAVE_SIZE );
-}
-
-/* This will wait forever until enumeration finishes and
- * we get configured, then it will report on the enumeration log
- */
-void
-enum_log_watch ( void )
-{
-	int ticks = 5;
-
-	enum_log_init ();
-
-	if ( use_P ) {
-	    while ( ! is_papoon_configured () )
-		;
-	    enum_log_show ();
-	    use_P = 0;
-
-	    return;
-	}
-
-	while ( ticks-- )
-	    delay_ms ( 1000 );
-
-	enum_log_show ();
-}
-
-static char *
-enum_saver ( u32 addr, int count )
-{
-	char *rv;
-	count &= 0x3ff;
-
-	if ( count == 0 )
-	    return (char *) 0;
-
-	rv = &save_buf[s_count];
-	pma_copy_in ( addr, rv, count );
-
-	s_count += count;
-	return rv;
-}
-
-#endif
 
 /* THE END */

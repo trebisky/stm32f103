@@ -27,7 +27,9 @@ GDB = $(TOOLS)-gdb
 
 #OBJS = locore.o main.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o
 #OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o serial.o timer.o usb.o papoon.o
-OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o kyulib.o serial.o timer.o usb.o usb_enum.o usb_watch.o papoon.o
+
+#OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o kyulib.o serial.o timer.o usb.o usb_enum.o usb_watch.o papoon.o
+OBJS = locore.o main.o startup.o nvic.o rcc.o gpio.o prf.o kyulib.o serial.o timer.o usb.o usb_enum.o usb_watch.o
 
 all: baboon.elf baboon.dump tags
 

@@ -24,6 +24,17 @@ MEMORY
    sram(RW)   : ORIGIN = 0x20000000, LENGTH = 20K
 }
 
+/* An experiment 12-3-2023
+ */
+
+PERIPH_BASE = 0x40000000;
+APB1PERIPH = PERIPH_BASE;
+USB    = APB1PERIPH + 0x5C00;
+USB_PMA = APB1PERIPH + 0x6000;
+
+PMA_buf = USB_PMA;
+PMA_btable = USB_PMA;
+
 SECTIONS
 {
    .text :
