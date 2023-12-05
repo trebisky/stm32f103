@@ -46,12 +46,13 @@ void endpoint_recv_ready ( int );
 static void pma_copy_in ( u32, char *, int );
 static void pma_copy_out ( u32, char *, int );
 void enum_log_watch ( void );
-static void endpoint_rem ( void );
+static void endpoint_rem ( int );
 void print_buf ( char *, int );
 static void endpoint_set_rx_ready ( int );
 static void endpoint_set_tx_nak ( int );
 static void endpoint_clear_rx ( int );
 static void endpoint_clear_tx ( int );
+static void endpoint_stall ( int );
 void endpoint_send_zlp ( int );
 
 static void data_ctr ( void );
@@ -506,8 +507,8 @@ usb_set_address ( int addr )
 	 * XXX Papoon does, but why?
 	 */
 
-
 	up->daddr = DADDR_EN | (addr & 0x7f);
+	up->daddr |= DADDR_EN;
 
 	// Looks correct 40005c4c and 00D3 for address 0x53
 	// printf ( "daddr at %08x\n", &up->daddr );
@@ -620,39 +621,45 @@ ctr0 ( void )
 		//printf ( "B" );
 		rv = usb_control ( buf, count );
 	    }
+	    // printf ( "At CTR_RX, epr = %04x\n", up->epr[0] );
 	    // return;
 	}
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_TX ) {
 
+	    if ( PMA_btable[0].tx_count == 0 )
+		printf ( "z" );
+
+	    endpoint_clear_tx ( EP_CONTROL );
+	    // printf ( "At CTR_TX, epr = %04x\n", up->epr[0] );
+
 	    /* Handle the postponed "set address"
 	     * This must be the CTR from the ZLP we sent.
 	     */
 	    if ( pending_address ) {
+		printf ( "a" );
+		// printf ( "At pend, epr = %04x\n", up->epr[0] );
 		// printf ( "Set pending addr: %d\n", pending_address );
 		usb_set_address ( pending_address );
 		pending_address = 0;
+		// endpoint_stall ( EP_CONTROL );
+		return;
 	    }
 
 	    /* Send second fragment of Tx packet */
 	    if ( ep_info[EP_CONTROL].flags & F_TX_REM ) {
-		endpoint_rem ();
+		endpoint_rem ( EP_CONTROL );
 		return;
 	    }
 
-	    endpoint_clear_tx ( EP_CONTROL );
 	    ep_info[EP_CONTROL].flags &= ~F_TX_BUSY;
-
-	    // XXX - should send endless ZLP
-	    // printf ( "Send tail ZLP\n" );
-	    // endpoint_send_zlp ( 0 );
 
 	    // printf ( "C" );
 	    // return usb_control_tx ();
 	}
 
 	// return 0;
-}
+} // end of ctr0 ();
 
 // int xx_count = 0;
 
@@ -743,6 +750,7 @@ usb_lp_handler ( void )
 	    // P_reset ();
 	    //usb_show ();
 	    usb_reset ();
+	    // printf ( "At RESET, epr = %04x\n", up->epr[0] );
 	    up->isr &= ~INT_RESET;
 	}
 
@@ -772,14 +780,15 @@ usb_lp_handler ( void )
 
 	    up->isr &= ~INT_CTR;
 	}
-
-	return;
+} // end of usr_lp_handler()
 
 #ifdef SOF_DEBUG
-	/* We see 913 SOF per second.
-	 * (actually, 1000 when we get our timer just right)
+	/* This was an interesting experiment.  Once.
+	 * We saw 913 SOF per second.
+	 * (actually, 1000 when we got our timer just right)
 	 * This confirms that we can clear the INT_SOF bit in the isr
-	 * We also gate off the interrupt by clearing the bit in CTR.
+	 * We can also gate off the interrupt by clearing the bit in
+	 * the up->ctrl control register.
 	 */
 	if ( up->isr & INT_SOF ) {
 	    /*
@@ -805,8 +814,6 @@ usb_lp_handler ( void )
 	    return;
 	}
 #endif
-
-}
 
 /* PMA (packet memory array) is 512 bytes of SRAM
  * The usb controller sees it as an array of 16 bit words.
@@ -878,16 +885,25 @@ pma_copy_out ( u32 pma_off, char *buf, int count )
 
 /* Setting the stat field in an Endpoint register requires all
  * kinds of jumping through hoops
+ *
+ * We have 3 flavor of bits in the endpoint registers.
+ * See page 45 in the reference manual for these.
+ * we have plain old r/w bits, "toogle" bits and rc_w0 bits.
+ *
  * The two CTR bits can be cleared by writing 0, writing 1 is a NOOP.
- * The various "toggle" bits are toggled by writing 1, 0 is a NOOP.
+ *  (these are the "rc_w0 bits")
  * The DTOG, and "status" bits are toggle bits
+ *  these "toggle" bits are toggled by writing 1; writing 0 is a NOOP.
  * Then we have plain old r/w bits (EA, type, kind)
- * Finally the SETUP bit is read only
+ * Finally the SETUP bit is read only, but ...
+ *  (but SETUP clears when CTR_RX is cleared)
  */
 
 #define	EP_W0_BITS	(EP_CTR_RX | EP_CTR_TX)
 #define	EP_TOGGLE_TX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_RX)
 #define	EP_TOGGLE_RX	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX)
+#define	EP_TOGGLE_ALL	(EP_DTOG_RX | EP_DTOG_TX | EP_STAT_TX | EP_STAT_RX)
+#define	EP_TOGGLE_STALL	(EP_DTOG_RX | EP_DTOG_TX)
 
 #ifdef notdef
 /* Made obsolete (for now anyway) by the
@@ -926,8 +942,8 @@ endpoint_clear_rx ( int ep )
 	// val |= EP_W0_BITS;
 	// clear CTR_RX, leave CTR_TX unchanged.
 	val &= ~EP_CTR_RX;
-	val |= EP_CTR_TX;
-	val &= ~ EP_TOGGLE_RX;
+	// val |= EP_CTR_TX;
+	val &= ~ EP_TOGGLE_ALL;
 
 	up->epr[ep] = val;
 }
@@ -947,7 +963,8 @@ endpoint_clear_tx ( int ep )
 	// clear CTR_RX, leave CTR_TX unchanged.
 	val &= ~EP_CTR_TX;
 	val |= EP_CTR_RX;
-	val &= ~ EP_TOGGLE_RX;
+	// val &= ~ EP_TOGGLE_RX;
+	val &= ~ EP_TOGGLE_ALL;
 
 	up->epr[ep] = val;
 }
@@ -976,6 +993,28 @@ endpoint_set_rx_ready ( int ep )
 
 	/* flip these to get desired status */
 	val ^= EP_RX_VALID;
+
+	up->epr[ep] = val;
+}
+
+static void
+endpoint_stall ( int ep )
+{
+        struct usb *up = USB_BASE;
+	u32 val;
+
+	val = up->epr[ep];
+
+	/* Make sure these bits are not changed */
+	// val |= EP_W0_BITS;
+	// clear both CTR_RX and CTR_TX
+	val &= ~EP_CTR_RX | EP_CTR_TX;
+	// val &= ~ EP_TOGGLE_STALL;
+	val &= ~ EP_TOGGLE_RX;
+
+	/* flip these to get desired status */
+	// val ^= EP_RX_STALL | EP_TX_STALL;;
+	val ^= EP_TX_STALL;;
 
 	up->epr[ep] = val;
 }
@@ -1064,17 +1103,18 @@ static int tx_rem_count;
  * PMA memory.
  */
 static void
-endpoint_rem ( void )
+endpoint_rem ( int ep )
 {
 	struct btable_entry *bte;
 
 	// printf ( "%" );
-	bte = & ((struct btable_entry *) USB_RAM) [0];
+	bte = & ((struct btable_entry *) USB_RAM) [ep];
 
 	bte->tx_count = tx_rem_count;
 	pma_copy_out ( bte->tx_addr, tx_rem, tx_rem_count );
-	endpoint_set_tx_valid ( EP_CONTROL );
-	ep_info[EP_CONTROL].flags &= ~F_TX_REM;
+	endpoint_set_tx_valid ( ep );
+
+	ep_info[ep].flags &= ~F_TX_REM;
 }
 
 /* send data on an endpoint */
@@ -1153,6 +1193,8 @@ endpoint_send_zlp ( int ep )
 {
 	struct btable_entry *bte;
         struct usb *up = USB_BASE;
+
+	printf ( "Z" );
 
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 

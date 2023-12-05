@@ -14,6 +14,10 @@ typedef volatile unsigned int vu32;
 
 #define BIT(x)	(1<<x)
 
+static inline void enable_irq() { __asm volatile("cpsie i"); }
+static inline void disable_irq() { __asm volatile("cpsid i"); }
+
+
 void panic ( char * );
 
 int usb_setup ( char *, int );

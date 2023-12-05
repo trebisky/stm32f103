@@ -6,9 +6,7 @@
 
 // for cqueue
 #include "kyulib.h"
-// for enable-disable irq
-// #include <stdint.h>
-// #include "core_cm3.h"
+#include "protos.h"
 
 #define BIT(x)	(1<<x)
 
@@ -177,14 +175,14 @@ serial_flush ( void )
 void
 serial_putc ( int c )
 {
-	// __disable_irq ();
+	disable_irq ();
 
 	if ( c == '\n' )
 	    cq_add ( &out_queue, '\r' );
 
 	cq_add ( &out_queue, c );
 
-	// __enable_irq ();
+	enable_irq ();
 
 	// sort of brutal
 	serial_start ();
