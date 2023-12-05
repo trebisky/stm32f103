@@ -24,7 +24,7 @@ void * memcpy ( void *, char *, int );
  * allocated.
  */
 
-#define MAX_CQ_SIZE	1024
+#define MAX_CQ_SIZE	2048
 
 struct cqueue {
 	char	buf[MAX_CQ_SIZE];

@@ -175,6 +175,12 @@ serial_flush ( void )
 void
 serial_putc ( int c )
 {
+
+	// spin waiting for space
+	// waiting for 2 would be enough
+	while ( cq_space ( &out_queue ) < 10 )
+	    ;
+
 	disable_irq ();
 
 	if ( c == '\n' )

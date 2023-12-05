@@ -366,7 +366,7 @@ string_send ( int index )
 	if ( n > 31 )
 	    panic ( "String too big" );
 
-	xx.length = 2*n;
+	xx.length = 2 + 2*n;
 	xx.type = D_STRING;
 
 	/* 8 bit ascii to 16 bit unicode */
