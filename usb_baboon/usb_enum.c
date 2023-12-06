@@ -13,6 +13,9 @@
  */
 
 #include "protos.h"
+#include "usb.h"
+
+extern volatile enum usb_state usb_state;
 
 #define DESC_TYPE_DEVICE	1
 #define DESC_TYPE_CONFIG	2
@@ -234,7 +237,7 @@ usb_setup ( char *buf, int count )
 		break;
 	}
 
-	printf ( "%d", rv );
+	// printf ( "%d", rv );
 	return rv;
 }
 
@@ -272,7 +275,7 @@ get_descriptor ( struct setup *sp )
 
 	    /* device qualifier */
 	    case D_QUAL:
-		printf ( "q" );
+		// printf ( "q" );
 		endpoint_send_zlp ( 0 );
 		return 1;
 
@@ -308,17 +311,17 @@ get_descriptor ( struct setup *sp )
 
 	    /* string - language codes */
 	    case D_STRING:
-		printf ( "s" );
+		// printf ( "s" );
 		// return string_send ( index );
 		len = string_send ( index );
-		printf ( "%d", len );
+		// printf ( "%d", len );
 		return len;
 
 	    default:
 		break;
 	}
 
-	printf ( "?" );
+	// printf ( "?" );
 	return 0;
 }
 
@@ -349,7 +352,7 @@ string_send ( int index )
 	int i;
 	int len;
 
-	printf ( "Index %d\n", index );
+	// printf ( "Index %d\n", index );
 
 	if ( index == 0 ) {
 	    len = sizeof (my_language_string_desc);
@@ -398,15 +401,25 @@ string_send ( int index )
  * Sending it makes things as they should be.
  *
  * At this point, we just ignore these requests.
+ *
+ * We get this during enumeration:    2120000000000700
+ * We get this when picocom connects: 2122030000000000
  */
 
 static void
 usb_class ( struct setup *sp )
 {
-	// printf ( "USB class/interface request: %02x\n", sp->request );
+	// printf ( "USB class/interface request: %02x - ", sp->request );
+	// print_buf ( sp, 8 );
+	// printf ( "\n" );
 	endpoint_send_zlp ( 0 );
 }
 
+/* This is the crazy "set address" where we can't just do it NOW,
+ * but we have to wait until after our ZLP get's acknowledged to
+ * set the new address.  This sort of makes sense.  The ZLP needs
+ * to be handled with the current addressing, then we change it.
+ */
 static int
 set_address ( struct setup *sp )
 {
@@ -415,13 +428,19 @@ set_address ( struct setup *sp )
 	// usb_set_address ( sp->value );
 	usb_pend_address ( sp->value );
 	endpoint_send_zlp ( 0 );
-	return 0;
+	return 1;
 }
 
+/* We get a command to set configuration "1", but of course
+ * we only have one configuration, so we just reply and
+ * ignore this.
+ */
 static int
 set_configuration ( struct setup *sp )
 {
-	return 0;
+	endpoint_send_zlp ( 0 );
+	usb_state = CONFIGURED;
+	return 1;
 }
 
 /* XXX ----------------------------------- */
@@ -432,13 +451,22 @@ set_configuration ( struct setup *sp )
 /* ----------------------------------------------- */
 
 /* control packet received (control OUT) */
+/* We get a 7 byte packet during enumeration:
+ * 80250000000008
+ * I have no idea what it is.
+ * I respond with ZLP and everything seems OK.
+ * This may be a CDC ACM thing.
+ */
 int
 usb_control ( char *buf, int count )
 {
-	printf ( "Control packet: %d bytes -- " );
-	print_buf ( buf, count );
+	// printf ( "Control packet: %d bytes -- " );
+	// print_buf ( buf, count );
+	// printf ( "\n" );
 
-	return 0;
+	endpoint_send_zlp ( 0 );
+
+	return 1;
 }
 
 #ifdef notdef

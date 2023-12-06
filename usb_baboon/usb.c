@@ -20,6 +20,9 @@
  */
 
 #include "protos.h"
+#include "usb.h"
+
+volatile enum usb_state usb_state = BOOT;
 
 // flag to use papoon for enumeration or not
 // int use_P = 0;
@@ -218,7 +221,8 @@ usb_init ( void )
 {
 	usb_hw_init ();
 	usb_reset ();
-	printf ( "TJT usb init done\n" );
+	// printf ( "TJT usb init done\n" );
+	usb_state = INIT;
 }
 
 /* We have 8 endpoint registers.
@@ -608,11 +612,15 @@ ctr0 ( void )
 	     */
 	    setup = up->epr[EP_CONTROL] & EP_SETUP;
 
+	    endpoint_clear_tx ( EP_CONTROL );
 	    count = endpoint_recv ( EP_CONTROL, buf );
 	    endpoint_recv_ready ( EP_CONTROL );
 
 	    // printf ( "Read %d bytes from EP 0", count );
 	    // print_buf ( buf, count );
+
+	    if ( count == 1 )
+		return;
 
 	    if ( setup ) {
 		//printf ( "A" );
@@ -627,8 +635,8 @@ ctr0 ( void )
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_TX ) {
 
-	    if ( PMA_btable[0].tx_count == 0 )
-		printf ( "z" );
+	    // if ( PMA_btable[0].tx_count == 0 )
+	    //	printf ( "z" );
 
 	    endpoint_clear_tx ( EP_CONTROL );
 	    // printf ( "At CTR_TX, epr = %04x\n", up->epr[0] );
@@ -637,7 +645,7 @@ ctr0 ( void )
 	     * This must be the CTR from the ZLP we sent.
 	     */
 	    if ( pending_address ) {
-		printf ( "a" );
+		// printf ( "a" );
 		// printf ( "At pend, epr = %04x\n", up->epr[0] );
 		// printf ( "Set pending addr: %d\n", pending_address );
 		usb_set_address ( pending_address );
@@ -753,14 +761,6 @@ usb_lp_handler ( void )
 	    // printf ( "At RESET, epr = %04x\n", up->epr[0] );
 	    up->isr &= ~INT_RESET;
 	}
-
-#ifdef notdef
-	if ( use_P ) {
-	    printf ( "P" );
-	    P_handler ();
-	    return;
-	}
-#endif
 
 	/* Correct transfer interrupt.
 	 * We handle some of these for endpoint 0
@@ -1194,7 +1194,7 @@ endpoint_send_zlp ( int ep )
 	struct btable_entry *bte;
         struct usb *up = USB_BASE;
 
-	printf ( "Z" );
+	// printf ( "Z" );
 
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 
@@ -1405,19 +1405,20 @@ static void test10 ( void );
 void
 enum_wait ( void )
 {
-	int ticks = 5;
+	while ( usb_state != CONFIGURED )
+	    ;
+}
 
 #ifdef notdef
-	if ( use_P ) {
-	    while ( ! is_papoon_configured () )
-		;
-	    return;
-	}
-#endif
+void
+enum_wait ( void )
+{
+	int ticks = 5;
 
 	while ( ticks-- )
 	    delay_ms ( 1000 );
 }
+#endif
 
 /*
  * Starting this up is a bit problematic.
@@ -1726,10 +1727,10 @@ test10 ( void )
 
 	for ( ;; ) {
 
-	    //printf ( "Waiting for data\n" );
+	    printf ( "Waiting for data on endpoint %d\n", EP_DATA );
 	    count = ep_recv ( EP_DATA, buf, 2 );
 
-	    // printf ( "Got data: %d\n", count );
+	    printf ( "Got data: %d\n", count );
 
 	    if ( count < 1 )
 		continue;
