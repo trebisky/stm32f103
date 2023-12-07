@@ -1,5 +1,9 @@
 usb_papoon
 
+This works, but it is just a stepping stone to "usb".
+
+What you really want is "usb"
+
 I wanted to try to use the C++ code from papoon_usb
 
 https://github.com/thanks4opensource/papoon_usb
