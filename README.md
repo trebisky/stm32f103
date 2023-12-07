@@ -81,8 +81,6 @@ Here is a list of projects from 2017 ---
 9. serial1 - first working serial (uart) driver
 9. lithium1 - lithium ion battery tester --P
 
-9. usb1 - get barely started working with USB --P
-
 Note that blink_maple is the only demo built to run on the Maple board.
 
 The letters are: M = links for Maple, B = zeros BSS, P = includes printf
@@ -92,8 +90,14 @@ The letters are: M = links for Maple, B = zeros BSS, P = includes printf
 The above work was done in 2017, I am beginning new work in 2023,
 focusing on learning about low level USB
 
+9. usb1 - get barely started working with USB (2017) --P
 1. usb2 - a copy of usb1 with new fixes  --P
 2. usb_papoon - the papoon_usb framework and a working echo! -BP
 3. usb_papoon2 - the papoon_usb framework using interrupts -BP
 4. usb_baboon - papoon2 running on the Maple board -BPM
+
+The above are just stepping stones to the following, which is
+wht you really want.
+
+1. usb - the final USB serial project  -BPM
 
