@@ -32,10 +32,12 @@ static const u8 my_device_desc[] = {
     0x00,   // bDeviceSubClass
     0x00,   // bDeviceProtocol
     0x40,   // bMaxPacketSize0
+
     0x83,   // idVendor = 0x0483
     0x04,   //    "     = MSB of uint16_t
     0x40,   // idProduct = 0x5740
     0x57,   //     "     = MSB of uint16_t
+
     0x00,   // bcdDevice = 2.00
     0x02,   //     "     = MSB of uint16_t
     1,      // Index of string descriptor describing manufacturer
@@ -97,8 +99,14 @@ static const u8  my_config_desc[] = {
     0x00,   // bMasterInterface: Communication class interface
     0x01,   // bSlaveInterface0: Data Class Interface
 
+#ifdef notdef
 #define ACM_ENDPOINT		2
 #define CDC_ENDPOINT_OUT	3
+#define CDC_ENDPOINT_IN		1
+#endif
+
+#define ACM_ENDPOINT		2
+#define CDC_ENDPOINT_OUT	1
 #define CDC_ENDPOINT_IN		1
 
 #define ACM_DATA_SIZE	8
@@ -109,6 +117,8 @@ static const u8  my_config_desc[] = {
 #define ENDPOINT_TYPE_BULK	2
 #define ENDPOINT_TYPE_INTERRUPT	3
 
+#ifdef notdef
+#endif
     // Endpoint 2 Descriptor
     0x07,   // bLength: Endpoint Descriptor size
     DESC_TYPE_ENDPOINT,
@@ -117,7 +127,6 @@ static const u8  my_config_desc[] = {
     ACM_DATA_SIZE,			// wMaxPacketSize:
     0x00,
     0xFF,   // bInterval:
-
 
     // Data class interface descriptor
     0x09,   // bLength: Interface Descriptor size
@@ -130,7 +139,7 @@ static const u8  my_config_desc[] = {
     0x00,   // bInterfaceProtocol:
     0x00,   // iInterface:
 
-    // Endpoint 3 Descriptor
+    // Endpoint 1 (3) Descriptor
     0x07,   // bLength: Endpoint Descriptor size
     DESC_TYPE_ENDPOINT,
     CDC_ENDPOINT_OUT,		// bEndpointAddress: (OUT3)

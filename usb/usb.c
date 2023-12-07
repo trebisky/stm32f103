@@ -50,7 +50,8 @@ static void endpoint_clear_tx ( int );
 static void endpoint_stall ( int );
 void endpoint_send_zlp ( int );
 
-static void data_ctr ( void );
+static void data_ctr ( int );
+void ep_send ( int, char *, int );
 
 #define USB_BASE        (struct usb *) 0x40005C00
 #define USB_RAM         (u32 *) 0x40006000
@@ -538,26 +539,26 @@ ctr0 ( void )
 	// return 0;
 } // end of ctr0 ();
 
-// int xx_count = 0;
+int xx_count = 0;
 
 /* Called from interrupt code on any CTR event
  * on a non-zero endpoint
  */
 static void
-data_ctr ( void )
+data_ctr ( int ep )
 {
         struct usb *up = USB_BASE;
 	struct btable_entry *bte;
-	int ep;
+	// int ep;
 	char buf[2];
 	int count;
 
-	ep = up->isr & 0xf;
+	// ep = up->isr & 0xf;
 
-	//if ( xx_count++ < 10 ) {
-	//    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
-	//    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
-	//}
+	if ( xx_count++ < 10 ) {
+	    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
+	    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
+	}
 
 	/* If it ain't 2, it must be 3.
 	 * We only ever send data on 3.
@@ -565,13 +566,23 @@ data_ctr ( void )
 	 * either here or when we send new
 	 * data (we do the latter).
 	 */
-	if ( ep != 2 ) {
+	// if ( ep != 2 ) {
+
+	if ( up->epr[ep] & EP_CTR_TX ) {
+	    printf ( "Data CTR for Tx  %04x\n", up->epr[ep] );
 	    endpoint_clear_tx ( ep );
-	    ep_info[EP_DATA].flags &= ~F_TX_BUSY;
+	    ep_info[ep].flags &= ~F_TX_BUSY;
+
 	    if ( run_test8 )
 		test8_ctr ();
 	    return;
 	}
+
+	if ( up->epr[ep] & EP_CTR_RX ) {
+	    endpoint_clear_rx ( ep );
+
+	    count = PMA_btable[ep].rx_count & 0x3ff;
+	    printf ( "%d bytes of data received\n", count );
 
 #ifdef notdef
 	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
@@ -581,17 +592,19 @@ data_ctr ( void )
 	printf ( " BTE rx_count = %04x\n", bte->rx_count );
 #endif
 
-	endpoint_clear_rx ( ep );
-	ep_info[EP_DATA].flags &= ~F_RX_BUSY;
+	    ep_info[ep].flags &= ~F_RX_BUSY;
 
+#ifdef notdef
 	// part of test 8
 	// count = endpoint_recv_limit ( ep, buf, 2 );
 	// printf ( "Received %d: %c\n", count, buf[0] );
 
 	if ( run_test8 )
 	    test8_start ();
+#endif
 
-	// endpoint_recv_ready ( ep );
+	    endpoint_recv_ready ( ep );
+	}
 }
 
 
@@ -642,7 +655,7 @@ usb_lp_handler ( void )
 		ctr0 ();
 		// printf ( "M" );
 	    } else {
-		data_ctr ();
+		data_ctr ( ep );
 	    }
 
 	    up->isr &= ~INT_CTR;
@@ -1004,6 +1017,7 @@ void
 endpoint_send ( int ep, char *buf, int count )
 {
 	struct btable_entry *bte;
+        struct usb *up = USB_BASE;
 
 	bte = & ((struct btable_entry *) USB_RAM) [ep];
 
@@ -1011,6 +1025,7 @@ endpoint_send ( int ep, char *buf, int count )
 	    bte->tx_count = count;
 	    pma_copy_out ( bte->tx_addr, buf, count );
 	    endpoint_set_tx_valid ( ep );
+	    printf ( "EP send, Tx valid %04x\n", up->epr[ep] );
 	    return;
 	}
 
@@ -1213,7 +1228,7 @@ usb_debug ( void )
 	// pma_show ();
 
 	// run echo demo
-	// test1 ();
+	test1 ();
 	// test2 ();
 	// test3 ();
 	// test4 ();
@@ -1244,6 +1259,21 @@ usb_debug ( void )
 
 	/* echo test */
 	test10 ();
+}
+
+static void
+test1 ( void )
+{
+	char buf[2];
+	int count;
+
+	buf[0] = '3';
+	count = 1;
+
+	for ( ;; ) {
+	    delay_ms ( 2 );
+	    ep_send ( EP_DATA, buf, count );
+	}
 }
 
 #ifdef SOF_DEBUG
@@ -1399,6 +1429,9 @@ ep_recv ( int ep, char *buf, int limit )
 void
 ep_send ( int ep, char *buf, int count )
 {
+        struct usb *up = USB_BASE;
+
+	printf ( "Waiting to send:  %04x\n", up->epr[ep] );
 	while ( ep_info[ep].flags & F_TX_BUSY )
 		;
 
