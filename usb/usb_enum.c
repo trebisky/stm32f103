@@ -23,6 +23,88 @@ extern volatile enum usb_state usb_state;
 #define DESC_TYPE_INTERFACE	4
 #define DESC_TYPE_ENDPOINT	5
 
+/* Act like we are a CP2102
+ */
+static const u8 my_device_desc[] = {
+    0x12,   // bLength
+    DESC_TYPE_DEVICE,
+    0x00, 0x02,   // bcdUSB = 2.00
+    0x00,   // bDeviceClass: 0 (device)
+    0x00,   // bDeviceSubClass
+    0x00,   // bDeviceProtocol
+    0x40,   // bMaxPacketSize0
+
+    0xc4,   // idVendor = 0x10c4 (silicon labs)
+    0x10,
+    0x60,   // idProduct = 0xEA60 (CP210x uart bridge)
+    0xea,   //
+
+    0x00,   // bcdDevice = 1.00
+    0x01,   //
+
+    1,      // Index of string descriptor describing manufacturer
+    2,      // Index of string descriptor describing product
+    3,      // Index of string descriptor describing device serial number
+    1       // bNumConfigurations
+};
+
+static const u8  my_config_desc[] = {
+    // Configuration Descriptor
+    0x09,   // bLength: Configuration Descriptor size
+    DESC_TYPE_CONFIG,
+    0x20,   // wTotalLength: including sub-descriptors
+    0x00,   //      "      : MSB of uint16_t
+
+    0x01,   // bNumInterfaces: 1
+    0x01,   // bConfigurationValue: 1
+    0x00,   // iConfiguration: Index of string descriptor for configuration
+    0xC0,   // bmAttributes: self powered (CP2102 would use 0x80)
+    0x32,   // MaxPower 0 mA
+
+    // Interface Descriptor
+    0x09,   // bLength: Interface Descriptor size
+    // static_cast<uint8_t>(UsbDev::DescriptorType::INTERFACE),
+    DESC_TYPE_INTERFACE,	// Interface descriptor type
+    0x00,   // bInterfaceNumber: Number of Interface
+    0x00,   // bAlternateSetting: Alternate setting
+    2,      // bNumEndpoints: 2
+    0xff,   // bInterfaceClass: Vendor specific
+    0x00,   // bInterfaceSubClass:
+    0x00,   // bInterfaceProtocol:
+    0x02,   // iInterface: (weird)
+
+#define DATA_ENDPOINT_OUT	1
+#define DATA_ENDPOINT_IN	1
+
+#define ACM_DATA_SIZE	8
+#define CDC_OUT_DATA_SIZE	64
+#define CDC_IN_DATA_SIZE	64
+
+#define ENDPOINT_DIR_IN	0x80
+#define ENDPOINT_TYPE_BULK	2
+#define ENDPOINT_TYPE_INTERRUPT	3
+
+
+    // Endpoint 1 Descriptor
+    0x07,                               // bLength: Endpoint Descriptor size
+    DESC_TYPE_ENDPOINT,
+    DATA_ENDPOINT_IN | ENDPOINT_DIR_IN,	// bEndpointAddress
+    ENDPOINT_TYPE_BULK,			// bmAttributes: Bulk
+    64,					// wMaxPacketSize:
+    0x00,				// ^ MSB
+    0x00,                               // bInterval
+
+    // Endpoint 1 Descriptor
+    0x07,   			// bLength: Endpoint Descriptor size
+    DESC_TYPE_ENDPOINT,
+    DATA_ENDPOINT_OUT,		// bEndpointAddress: (OUT3)
+    ENDPOINT_TYPE_BULK,		// bmAttributes: Bulk
+    64,				// wMaxPacketSize: 64
+    0x00,			// ^ MSB
+    0x00			   // bInterval: ignore for Bulk transfer
+};
+
+#ifdef ACM_DEVICE
 static const u8 my_device_desc[] = {
     0x12,   // bLength
     DESC_TYPE_DEVICE,
@@ -46,7 +128,15 @@ static const u8 my_device_desc[] = {
     0x01    // bNumConfigurations
 };
 
-// not const because set total size entry
+/* This is the response to "get descriptor -- config"
+ * This is the original ACM response that uses 3 endpoints.
+ * Enumeration first asks for 9 bytes and gets the first part
+ * (the configuration part).  This has the total length.
+ * It then comes back a second time for the whole thing.
+ * With 3 endpoints this is:
+ *	9 + 9 + (5 + 5 + 4 + 5 ) + 7 + 9 + 7 + 7
+ *      which is 67 bytes (0x43), requiring 2 transfers.
+ */
 static const u8  my_config_desc[] = {
     // Configuration Descriptor
     0x09,   // bLength: Configuration Descriptor size
@@ -157,6 +247,7 @@ static const u8  my_config_desc[] = {
     0x00,
     0x00                                // bInterval
 };
+#endif
 
 /* There is a 16 bit language id we need to send.
  * Wireshark recognizes0x0409 as " English (United States)"
@@ -193,6 +284,8 @@ static void would_send ( char *, char *, int );
 #define RT_TYPE		(0x3<<5)
 #define RT_DIR		0x80
 
+static int get_vendor ( struct setup * );
+static int set_vendor ( struct setup * );
 static int get_descriptor ( struct setup * );
 static int set_address ( struct setup * );
 static int set_configuration ( struct setup * );
@@ -216,8 +309,10 @@ usb_setup ( char *buf, int count )
 	int tag;
 	int rv = 0;
 
-	// printf ( "Setup packet: %d bytes -- " );
-	// print_buf ( buf, count );
+	if ( usb_state == CONFIGURED ) {
+	    printf ( "Setup packet: %d bytes -- " );
+	    print_buf ( buf, count );
+	}
 
 	/* Just ignore ZLP (zero length packets) */
 	if ( count == 0 )
@@ -242,6 +337,12 @@ usb_setup ( char *buf, int count )
 	    case 0x0009:
 		rv = set_configuration ( sp );
 		break;
+	    case 0xc0ff:
+		rv = get_vendor ( sp );
+		break;
+	    case 0x4100:
+		rv = set_vendor ( sp );
+		break;
 	    default:
 		break;
 	}
@@ -254,6 +355,32 @@ usb_setup ( char *buf, int count )
 #define D_CONFIG	2
 #define D_STRING	3
 #define D_QUAL		6
+
+static const u8 part_number[] = {
+	2, 0
+};
+
+/* Just a hack to support CP2102
+ */
+static int
+get_vendor ( struct setup *sp )
+{
+	endpoint_send ( 0, part_number, 1 );
+
+}
+
+/* When picocom connects we see:
+ * Setup packet: 8 bytes --  4100010000000000
+ * Linux logs report 
+ *   cp210x ttyUSB1: failed set request 0x0 status: -110
+ *   cp210x ttyUSB1: cp210x_open - Unable to enable UART
+ *
+ */
+static int
+set_vendor ( struct setup *sp )
+{
+	endpoint_send_zlp ( 0 );
+}
 
 static int
 get_descriptor ( struct setup *sp )
@@ -343,7 +470,7 @@ struct string_xx {
 static u8 *my_strings[] = {
     "---",
     "ACME computers",
-    "Stupid ACM port",
+    "Stupid serial port",
     "1234"
 };
 
@@ -469,9 +596,10 @@ set_configuration ( struct setup *sp )
 int
 usb_control ( char *buf, int count )
 {
-	// printf ( "Control packet: %d bytes -- " );
-	// print_buf ( buf, count );
-	// printf ( "\n" );
+	printf ( "Control packet: %d bytes -- ", count );
+	if ( count > 0 )
+	    print_buf ( buf, count );
+	printf ( "\n" );
 
 	endpoint_send_zlp ( 0 );
 

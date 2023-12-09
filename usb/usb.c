@@ -19,6 +19,19 @@
 
 volatile enum usb_state usb_state = BOOT;
 
+static char *
+usb_state_str ( void )
+{
+	if ( usb_state == BOOT )
+	    return "BOOT";
+	if ( usb_state == INIT )
+	    return "INIT";
+	if ( usb_state == CONFIGURED )
+	    return "CONFIGURED";
+
+	return "USB-unknown";
+}
+
 static int run_test8 = 0;
 static void test8_start ( void );
 static void test8_ctr ( void );
@@ -467,10 +480,14 @@ ctr0 ( void )
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_RX ) {
 
+	    enum_logger ( 0 );
+
 	    /* do we really need this check ? */
 	    // bte = & ((struct btable_entry *) USB_RAM) [0];
 	    bte = & PMA_btable[EP_CONTROL];
 	    count = bte->rx_count & 0x3ff;
+	    // printf ( " Rx CTR ep%d %d\n", 0, count );
+
 	    if ( count > SETUP_BUF ) {
 		printf ( "Setup too big: %d\n", count );
 		panic ( "setup count" );
@@ -505,6 +522,10 @@ ctr0 ( void )
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_TX ) {
 
+	    enum_logger ( 1 );
+
+	    count = PMA_btable[0].tx_count;
+	    // printf ( " Tx CTR %d (done)\n", count );
 	    // if ( PMA_btable[0].tx_count == 0 )
 	    //	printf ( "z" );
 
@@ -624,7 +645,13 @@ usb_lp_handler ( void )
 	}
 
 	/* This allows enumeration capture */
-	enum_handler ();
+	/* !! This was missing some Tx events.
+	 * We would get an Rx CTR, send a response
+	 * to whatever packet that was and then the
+	 * Tx CTR would get set (and handled in ctr0()
+	 * before we even exit this interrupt handler!!
+	 */
+	// enum_handler ();
 
 	// printf ( "I%04x\n", up->isr );
 
@@ -639,6 +666,7 @@ usb_lp_handler ( void )
 	    //usb_show ();
 	    usb_reset ();
 	    // printf ( "At RESET, epr = %04x\n", up->epr[0] );
+	    enum_logger ( 2 );
 	    up->isr &= ~INT_RESET;
 	}
 
@@ -1025,7 +1053,8 @@ endpoint_send ( int ep, char *buf, int count )
 	    bte->tx_count = count;
 	    pma_copy_out ( bte->tx_addr, buf, count );
 	    endpoint_set_tx_valid ( ep );
-	    printf ( "EP send, Tx valid %04x\n", up->epr[ep] );
+	    if ( ep != 0 )
+		printf ( "EP send, %d %d, Tx valid %04x %s\n", ep, count, up->epr[ep], usb_state_str() );
 	    return;
 	}
 
@@ -1197,20 +1226,17 @@ static void test10 ( void );
 void
 enum_wait ( void )
 {
-	while ( usb_state != CONFIGURED )
-	    ;
-}
+	int tmo = 5 * 100;
 
-#ifdef notdef
-void
-enum_wait ( void )
-{
-	int ticks = 5;
+	while ( tmo-- ) {
+	    delay_ms ( 10 );
+	    if ( usb_state == CONFIGURED )
+		break;
+	}
 
-	while ( ticks-- )
-	    delay_ms ( 1000 );
+	if ( usb_state != CONFIGURED )
+	    printf ( "Enumeration failed (timed out)\n" );
 }
-#endif
 
 void
 usb_debug ( void )
@@ -1227,16 +1253,20 @@ usb_debug ( void )
 	// btable_show ();
 	// pma_show ();
 
-	// run echo demo
-	test1 ();
-	// test2 ();
-	// test3 ();
-	// test4 ();
 
 	// run enumeration detailer
 	// enum_log_watch ();
 	enum_wait ();
 	enum_log_show ();
+
+	if ( usb_state != CONFIGURED )
+	    printf ( "Enumeration failed (timed out)\n" );
+
+	// run echo demo
+	test1 ();
+	// test2 ();
+	// test3 ();
+	// test4 ();
 
 #ifdef notdef
 	delay_sec ( 4 );
@@ -1244,9 +1274,6 @@ usb_debug ( void )
 	usb_disconnect ();
 	enum_log_watch ();
 #endif
-
-	// the papooon echo demo
-	// test1 ();
 
 	// test6 ();
 	// test7 ();
@@ -1267,6 +1294,8 @@ test1 ( void )
 	char buf[2];
 	int count;
 
+	printf ( "Running endless output demo (test1)\n" );
+
 	buf[0] = '3';
 	count = 1;
 
@@ -1274,6 +1303,7 @@ test1 ( void )
 	    delay_ms ( 2 );
 	    ep_send ( EP_DATA, buf, count );
 	}
+	printf ( "endless output demo finished\n" );
 }
 
 #ifdef SOF_DEBUG
@@ -1430,6 +1460,9 @@ void
 ep_send ( int ep, char *buf, int count )
 {
         struct usb *up = USB_BASE;
+
+	if ( usb_state != CONFIGURED )
+	    return;
 
 	printf ( "Waiting to send:  %04x\n", up->epr[ep] );
 	while ( ep_info[ep].flags & F_TX_BUSY )

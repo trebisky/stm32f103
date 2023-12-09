@@ -80,7 +80,9 @@ uart_init ( struct uart *up, int baud )
 #endif
 }
 
+#define OUT_BUF_SIZE	2048
 static struct cqueue out_queue;
+static char out_buf[OUT_BUF_SIZE];
 
 void
 serial_init ( void )
@@ -92,7 +94,7 @@ serial_init ( void )
 	// uart_init ( UART1_BASE, 57600 ); ??
 	uart_init ( UART1_BASE, 115200 );
 
-	(void) cq_init ( &out_queue );
+	(void) cq_init ( &out_queue, out_buf, OUT_BUF_SIZE );
 
 	nvic_enable ( UART1_IRQ );
 

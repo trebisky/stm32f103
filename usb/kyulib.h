@@ -24,10 +24,12 @@ void * memcpy ( void *, char *, int );
  * allocated.
  */
 
-#define MAX_CQ_SIZE	2048
+// #define MAX_CQ_SIZE	2048
+#define DEFAULT_CQ_SIZE	512
 
 struct cqueue {
-	char	buf[MAX_CQ_SIZE];
+	// char	buf[MAX_CQ_SIZE];
+	char	*buf;
 	char	*bp;
 	char	*ip;
 	char	*op;
@@ -38,7 +40,8 @@ struct cqueue {
 };
 
 // struct cqueue * cq_init ( int );
-struct cqueue * cq_init ( struct cqueue * );
+// struct cqueue * cq_init ( struct cqueue * );
+struct cqueue * cq_init ( struct cqueue *, char *, int );
 void cq_add ( struct cqueue *, int );
 int cq_remove ( struct cqueue * );
 int cq_count ( struct cqueue * );

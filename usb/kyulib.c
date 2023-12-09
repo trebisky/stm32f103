@@ -31,11 +31,12 @@
  * which is sort of silly, but sort of compatible
  * with the original API
  */
+// struct cqueue * cq_init ( struct cqueue *qp )
 struct cqueue *
-cq_init ( struct cqueue *qp )
+cq_init ( struct cqueue *qp, char *buf, int size )
 {
-	/* XXX - argument is ignored */
-	qp->size = MAX_CQ_SIZE;
+	qp->buf = buf;
+	qp->size = size;
 	qp->count = 0;
 	qp->ip = qp->op = qp->bp = qp->buf;
 	qp->limit = &qp->bp[qp->size];

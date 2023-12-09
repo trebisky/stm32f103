@@ -122,12 +122,15 @@ pma_copy_in ( u32 pma_off, char *buf, int count )
 
 void enum_logger ( int );
 
+#ifdef notdef
 /* The idea here is to capture enumeration activity
  * for later analysis without disturbing anything.
  * (i.e. a passive watcher)
  *
  * CALL THIS from the USB interrupt routine
  * as early on as possible.
+ *
+ * We no longer use this (see usb.c)
  */
 void
 enum_handler ( void )
@@ -140,6 +143,7 @@ enum_handler ( void )
 
 	if ( up->isr & INT_CTR ) {
 	    ep = up->isr & 0xf;
+	    printf ( "EH: %d %04x\n", ep, up->epr[0] );
 	    if ( ep == 0 ) {
 		if ( up->epr[0] & EP_CTR_RX )
 		    enum_logger ( 0 );
@@ -148,6 +152,7 @@ enum_handler ( void )
 	    }
 	}
 }
+#endif
 
 static char * enum_saver ( u32, int );
 
