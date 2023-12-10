@@ -62,6 +62,12 @@ gdb:
 gdbtui:
 	$(GDB) -tui --eval-command="target remote localhost:3333" dragoon.elf
 
+# This is useful when a vid/pid is selected that is not known by any standard
+# driver.  I used it with the "daed" code -- and it is persistent until the
+# system is rebooted.
+usb-serial:
+	echo 0483 5722 >/sys/bus/usb-serial/drivers/generic/new_id
+
 tags:
 	ctags -R .
 

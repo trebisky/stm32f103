@@ -16,6 +16,7 @@
 #include "usb.h"
 
 extern volatile enum usb_state usb_state;
+extern enum uart_state uart_state;
 
 #define DESC_TYPE_DEVICE	1
 #define DESC_TYPE_CONFIG	2
@@ -284,12 +285,32 @@ static void would_send ( char *, char *, int );
 #define RT_TYPE		(0x3<<5)
 #define RT_DIR		0x80
 
-static int get_vendor ( struct setup * );
-static int set_vendor ( struct setup * );
 static int get_descriptor ( struct setup * );
 static int set_address ( struct setup * );
 static int set_configuration ( struct setup * );
 static int string_send ( int );
+
+static int cp21_vendor ( struct setup * );
+static int cp21_enable ( struct setup * );
+static int cp21_set_baud ( struct setup * );
+static int cp21_set_line ( struct setup * );
+static int cp21_set_chars ( struct setup * );
+static int cp21_get_flow ( struct setup * );
+static int cp21_get_modem ( struct setup * );
+
+/* Some cp2102 setup commands will have associated
+ * control data following
+ */
+enum cp21_control {
+	NONE,
+	BAUD,
+	CHARS
+};
+
+enum cp21_control cp21_control = NONE;
+
+static char cp21_baud[4];
+static char cp21_chars[6];
 
 /* We get either setup or control packets on endpoint 0
  * This file handles both.
@@ -327,6 +348,9 @@ usb_setup ( char *buf, int count )
 
 	tag = sp->rtype << 8 | sp->request;
 
+	// reset this.
+	cp21_control = NONE;
+
 	switch ( tag ) {
 	    case 0x8006:
 		rv = get_descriptor ( sp );
@@ -338,18 +362,61 @@ usb_setup ( char *buf, int count )
 		rv = set_configuration ( sp );
 		break;
 	    case 0xc0ff:
-		rv = get_vendor ( sp );
+		rv = cp21_vendor ( sp );
 		break;
 	    case 0x4100:
-		rv = set_vendor ( sp );
+		rv = cp21_enable ( sp );
+		break;
+	    case 0x411e:
+		rv = cp21_set_baud ( sp );
+		break;
+	    case 0x4103:
+		rv = cp21_set_line ( sp );
+		break;
+	    case 0x4119:
+		rv = cp21_set_chars ( sp );
+		break;
+	    case 0xc114:
+		rv = cp21_get_flow ( sp );
+		break;
+	    case 0xc108:
+		rv = cp21_get_modem ( sp );
 		break;
 	    default:
 		break;
 	}
 
+	// This hangs the system during enumeration
+	// serial_flush ();
+
 	// printf ( "%d", rv );
 	return rv;
 }
+
+/*
+We see on picocom connect:
+Setup packet: 8 bytes --  4107030300000000 - set modem handshaking
+Setup packet: 8 bytes --  C108000000000100 - get modem status
+Setup packet: 8 bytes --  C110000000001300 - get serial status
+Setup packet: 8 bytes --  4103000800000000 - set line control
+Setup packet: 8 bytes --  C114000000001000 - get flow control
+Setup packet: 8 bytes --  C108000000000100 - get modem status
+Setup packet: 8 bytes --  C108000000000100 - get modem status
+</pre>
+
+When picocom shuts down, we get all of this:
+
+<pre>
+- Setup packet: 8 bytes --  4103000800000000 - line control
+- Setup packet: 8 bytes --  4119000000000600 - set chars
+- Control packet: 6 bytes --  000000001113
+Setup packet: 8 bytes --  C114000000001000 - get flow
+Setup packet: 8 bytes --  C110000000001300 - get baud rate
+Setup packet: 8 bytes --  4107000300000000 - set modem handshake
+Setup packet: 8 bytes --  41120F0000000000 - purge
+- Setup packet: 8 bytes --  4100000000000000 - disable uart
+ */
+
 
 #define D_DESC		1
 #define D_CONFIG	2
@@ -363,7 +430,7 @@ static const u8 part_number[] = {
 /* Just a hack to support CP2102
  */
 static int
-get_vendor ( struct setup *sp )
+cp21_vendor ( struct setup *sp )
 {
 	endpoint_send ( 0, part_number, 1 );
 
@@ -377,10 +444,103 @@ get_vendor ( struct setup *sp )
  *
  */
 static int
-set_vendor ( struct setup *sp )
+cp21_enable ( struct setup *sp )
+{
+	if ( sp->value == 1 ) {
+	    uart_state = ENABLED;
+	    printf ( "Uart enabled\n" );
+	} else {
+	    uart_state = DISABLED;
+	    printf ( "Uart disabled\n" );
+	}
+
+	// Need this
+	endpoint_send_zlp ( 0 );
+}
+
+/* We see this.
+ * Setup packet: 8 bytes --  411E000000000400 - set baud rate
+ * Control packet: 4 bytes --  80250000
+ *
+ * The 4 byte control packet gives the baud rate.
+ *  0x2580 = 9600
+ * We will just ignore it.
+ */
+
+static int
+cp21_set_baud ( struct setup *sp )
+{
+	cp21_control = BAUD;
+	endpoint_send_zlp ( 0 );
+}
+
+/* Set special characters.
+ * We see this.
+ * Setup packet: 8 bytes --  4119000000000600 - set chars
+ * Control packet: 6 bytes --  000000001113
+ *
+ * Table 12 in AN571 gives these.
+ * Here we just specify Xon = 0x11 and Xoff = 0x13
+ */
+static int
+cp21_set_chars ( struct setup *sp )
+{
+	cp21_control = CHARS;
+	endpoint_send_zlp ( 0 );
+}
+
+/* Sets stop bits, parity, ...
+ *  just ignore
+ */
+static int
+cp21_set_line ( struct setup *sp )
 {
 	endpoint_send_zlp ( 0 );
 }
+
+static char flow[16];
+
+/* Get flow control state (expects 16 byte return)
+ * Table 9 in AN571
+ */
+static int
+cp21_get_flow ( struct setup *sp )
+{
+	memset ( flow, 0, 16 );
+	printf ( "get flow\n" );
+
+	// this second call and printf are OK.
+	memset ( flow, 0, 16 );
+	printf ( "get flow\n" );
+
+	// All this is OK too.
+	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
+	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
+	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
+	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
+
+	// XXX this call crashes the code too
+	// serial_flush ();
+
+	// XXX this call crashes the code
+	// endpoint_send ( 0, flow, 16 );
+}
+
+static u8 modem_status[] = {
+	0, 0
+};
+
+/* get modem status.
+ * this wants a single byte response
+ */
+static int
+cp21_get_modem ( struct setup *sp )
+{
+	endpoint_send ( 0, modem_status, 1 );
+}
+
+/* =============================================================== */
+/* =============================================================== */
 
 static int
 get_descriptor ( struct setup *sp )
@@ -470,7 +630,7 @@ struct string_xx {
 static u8 *my_strings[] = {
     "---",
     "ACME computers",
-    "Stupid serial port",
+    "Basic console port",
     "1234"
 };
 
@@ -596,12 +756,19 @@ set_configuration ( struct setup *sp )
 int
 usb_control ( char *buf, int count )
 {
-	printf ( "Control packet: %d bytes -- ", count );
-	if ( count > 0 )
-	    print_buf ( buf, count );
-	printf ( "\n" );
+	if ( cp21_control == BAUD )
+	    memcpy ( cp21_baud, buf, count );
+	else if ( cp21_control == CHARS )
+	    memcpy ( cp21_chars, buf, count );
+	else {
+	    printf ( "Control packet: %d bytes -- ", count );
+	    if ( count > 0 )
+		print_buf ( buf, count );
+	    else
+		printf ( "\n" );
+	    endpoint_send_zlp ( 0 );
+	}
 
-	endpoint_send_zlp ( 0 );
 
 	return 1;
 }

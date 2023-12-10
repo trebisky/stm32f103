@@ -16,8 +16,10 @@
 
 #include "protos.h"
 #include "usb.h"
+#include "kyulib.h"
 
 volatile enum usb_state usb_state = BOOT;
+enum uart_state uart_state = DISABLED;
 
 static char *
 usb_state_str ( void )
@@ -209,9 +211,15 @@ struct endpoint {
 
 struct endpoint ep_info[NUM_EP];
 
+#define IN_BUF_SIZE    256
+static struct cqueue in_queue;
+static char in_buf[IN_BUF_SIZE];
+
 void
 usb_init ( void )
 {
+        (void) cq_init ( &in_queue, in_buf, IN_BUF_SIZE );
+
 	usb_hw_init ();
 	usb_reset ();
 	// printf ( "TJT usb init done\n" );
@@ -570,16 +578,15 @@ data_ctr ( int ep )
 {
         struct usb *up = USB_BASE;
 	struct btable_entry *bte;
-	// int ep;
-	char buf[2];
+	char inbuf[64];
 	int count;
+	int i;
 
 	// ep = up->isr & 0xf;
 
-	if ( xx_count++ < 10 ) {
-	    printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
-	    printf ( " EPR[%d] = %04x\n", ep, up->epr[ep] );
-	}
+	// if ( xx_count++ < 10 ) {
+	//     printf ( "Data CTR on endpoint %d isr=%04x epr=%04x\n", ep, up->isr, up->epr[ep] );
+	// }
 
 	/* If it ain't 2, it must be 3.
 	 * We only ever send data on 3.
@@ -590,7 +597,7 @@ data_ctr ( int ep )
 	// if ( ep != 2 ) {
 
 	if ( up->epr[ep] & EP_CTR_TX ) {
-	    printf ( "Data CTR for Tx  %04x\n", up->epr[ep] );
+	    printf ( "Data CTR (Tx) on endpoint %d isr=%04x epr=%04x\n", ep, up->isr, up->epr[ep] );
 	    endpoint_clear_tx ( ep );
 	    ep_info[ep].flags &= ~F_TX_BUSY;
 
@@ -600,10 +607,28 @@ data_ctr ( int ep )
 	}
 
 	if ( up->epr[ep] & EP_CTR_RX ) {
+	    printf ( "Data CTR (Rx) on endpoint %d isr=%04x epr=%04x\n", ep, up->isr, up->epr[ep] );
 	    endpoint_clear_rx ( ep );
 
 	    count = PMA_btable[ep].rx_count & 0x3ff;
-	    printf ( "%d bytes of data received\n", count );
+	    bte = & ((struct btable_entry *) USB_RAM) [ep];
+	    pma_copy_in ( bte->rx_addr, inbuf, count );
+
+	    printf ( "%d bytes of data received: %02x\n", count, inbuf[0] );
+
+	    for ( i=0; i<count; i++ ) {
+		if ( cq_space ( &in_queue ) > 0 )
+		    cq_add ( &in_queue, inbuf[i] );
+	    }
+
+	    /* What is going on ?? */
+	    if ( count > 0 && inbuf[0] == '?' ) {
+		printf ( "inqueue size = %d\n", cq_count ( &in_queue ) );
+		if ( ep_info[ep].flags & F_TX_BUSY )
+		    printf ( "Tx BUSY on endpoint %d, epr = %04x\n", ep, up->epr[ep] );
+		else
+		    printf ( "Tx ready on endpoint %d, epr = %04x\n", ep, up->epr[ep] );
+	    }
 
 #ifdef notdef
 	printf ( "Data CTR on endpoint %d %04x\n", ep, up->isr );
@@ -613,7 +638,8 @@ data_ctr ( int ep )
 	printf ( " BTE rx_count = %04x\n", bte->rx_count );
 #endif
 
-	    ep_info[ep].flags &= ~F_RX_BUSY;
+	    // Consumer should just poll cq_count ()
+	    // ep_info[ep].flags &= ~F_RX_BUSY;
 
 #ifdef notdef
 	// part of test 8
@@ -1257,10 +1283,14 @@ usb_debug ( void )
 	// run enumeration detailer
 	// enum_log_watch ();
 	enum_wait ();
+	serial_flush ();
 	enum_log_show ();
+	serial_flush ();
 
 	if ( usb_state != CONFIGURED )
 	    printf ( "Enumeration failed (timed out)\n" );
+	else
+	    printf ( "Enumeration succeeded *** CONFIGURED !!\n" );
 
 	// run echo demo
 	test1 ();
@@ -1440,6 +1470,7 @@ test8 ( void )
 	run_test8 = 1;
 }
 
+#ifdef notdef
 int
 ep_recv ( int ep, char *buf, int limit )
 {
@@ -1455,6 +1486,27 @@ ep_recv ( int ep, char *buf, int limit )
 
 	return rv;
 }
+#endif
+
+/* Handle interrupt driven input */
+int
+ep_recv ( int ep, char *buf, int limit )
+{
+	int i, n;
+
+	/* Spin here waiting for input */
+	while ( cq_count ( &in_queue ) < 1 )
+	    ;
+
+	n = cq_count ( &in_queue );
+	if ( n > limit )
+	    n = limit;
+
+	for ( i=0; i<n; i++ )
+	    buf[i] = cq_remove ( &in_queue );
+
+	return n;
+}
 
 void
 ep_send ( int ep, char *buf, int count )
@@ -1464,10 +1516,14 @@ ep_send ( int ep, char *buf, int count )
 	if ( usb_state != CONFIGURED )
 	    return;
 
-	printf ( "Waiting to send:  %04x\n", up->epr[ep] );
+	if ( uart_state != ENABLED )
+	    return;
+
+	printf ( "Waiting to send (endpoint %d):  %04x\n", ep, up->epr[ep] );
 	while ( ep_info[ep].flags & F_TX_BUSY )
 		;
 
+	printf ( "Send 1 char on endpoint %d\n", ep );
 	endpoint_send ( ep, buf, count );
 
 	ep_info[ep].flags |= F_TX_BUSY;

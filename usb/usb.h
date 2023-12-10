@@ -11,4 +11,9 @@ enum usb_state {
 	CONFIGURED
 };
 
+enum uart_state {
+	DISABLED,
+	ENABLED,
+};
+
 /* THE END */
