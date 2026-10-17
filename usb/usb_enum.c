@@ -24,6 +24,19 @@ extern enum uart_state uart_state;
 #define DESC_TYPE_INTERFACE	4
 #define DESC_TYPE_ENDPOINT	5
 
+#ifdef notdef
+// USELESS
+// Allow all characters to be output
+static void
+debug_spin ( char *msg )
+{
+	printf ( "%s\n", msg );
+	enable_irq ();
+	for ( ;; )
+	    ;
+}
+#endif
+
 /* Act like we are a CP2102
  */
 static const u8 my_device_desc[] = {
@@ -333,6 +346,8 @@ usb_setup ( char *buf, int count )
 	if ( usb_state == CONFIGURED ) {
 	    printf ( "Setup packet: %d bytes -- " );
 	    print_buf ( buf, count );
+	    // this of course deadlocks.
+	    // serial_flush ();
 	}
 
 	/* Just ignore ZLP (zero length packets) */
@@ -385,9 +400,6 @@ usb_setup ( char *buf, int count )
 	    default:
 		break;
 	}
-
-	// This hangs the system during enumeration
-	// serial_flush ();
 
 	// printf ( "%d", rv );
 	return rv;
@@ -507,23 +519,13 @@ static int
 cp21_get_flow ( struct setup *sp )
 {
 	memset ( flow, 0, 16 );
-	printf ( "get flow\n" );
+	// printf ( "get flow\n" );
 
-	// this second call and printf are OK.
-	memset ( flow, 0, 16 );
-	printf ( "get flow\n" );
+	// serial_putc_basic ( 'X' );
 
-	// All this is OK too.
-	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
-	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
-	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
-	printf ( "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" );
-
-	// XXX this call crashes the code too
-	// serial_flush ();
-
-	// XXX this call crashes the code
 	// endpoint_send ( 0, flow, 16 );
+
+	// serial_putc_basic ( 'Y' );
 }
 
 static u8 modem_status[] = {

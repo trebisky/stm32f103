@@ -34,6 +34,12 @@ usb_state_str ( void )
 	return "USB-unknown";
 }
 
+int
+usb_is_configured ( void )
+{
+	return usb_state == CONFIGURED ? 1 : 0;
+}
+
 static int run_test8 = 0;
 static void test8_start ( void );
 static void test8_ctr ( void );
@@ -471,7 +477,7 @@ static int sof_count = 0;
  * - it is "control line state"
  */
 static void
-ctr0 ( void )
+setup_ctr ( void )
 {
         struct usb *up = USB_BASE;
 	struct btable_entry *bte;
@@ -483,10 +489,13 @@ ctr0 ( void )
 	// No interrupts
 	// up->ctrl = 0;
 
+	serial_putc_basic ( 'I' );
+
 	// printf ( "CTR on endpoint %d %04x\n", 0, up->isr );
 	// printf ( " EPR[%d] = %04x\n", 0, up->epr[0] );
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_RX ) {
+	    serial_putc_basic ( 'r' );
 
 	    enum_logger ( 0 );
 
@@ -514,8 +523,14 @@ ctr0 ( void )
 	    // printf ( "Read %d bytes from EP 0", count );
 	    // print_buf ( buf, count );
 
-	    if ( count == 1 )
-		return;
+	    // BAD idea, this was causing us to never
+	    // fall into the CTR_TX code before.
+	    // let the setup or control routines
+	    // deal with this.
+	    // Actually a single byte to control is
+	    // probably valid.  SETUP should only
+	    // accept 8 byte packets.
+	    // if ( rv == 1 ) return;
 
 	    if ( setup ) {
 		//printf ( "A" );
@@ -524,11 +539,15 @@ ctr0 ( void )
 		//printf ( "B" );
 		rv = usb_control ( buf, count );
 	    }
+
 	    // printf ( "At CTR_RX, epr = %04x\n", up->epr[0] );
 	    // return;
+
+	    serial_putc_basic ( 'R' );
 	}
 
 	if ( up->epr[EP_CONTROL] & EP_CTR_TX ) {
+	    serial_putc_basic ( 't' );
 
 	    enum_logger ( 1 );
 
@@ -549,24 +568,27 @@ ctr0 ( void )
 		// printf ( "Set pending addr: %d\n", pending_address );
 		usb_set_address ( pending_address );
 		pending_address = 0;
-		// endpoint_stall ( EP_CONTROL );
+		serial_putc_basic ( 'A' );
 		return;
 	    }
 
 	    /* Send second fragment of Tx packet */
 	    if ( ep_info[EP_CONTROL].flags & F_TX_REM ) {
 		endpoint_rem ( EP_CONTROL );
-		return;
+		//--- return;
 	    }
 
 	    ep_info[EP_CONTROL].flags &= ~F_TX_BUSY;
+
+	    serial_putc_basic ( 'T' );
 
 	    // printf ( "C" );
 	    // return usb_control_tx ();
 	}
 
+
 	// return 0;
-} // end of ctr0 ();
+} // end of setup_ctr ();
 
 int xx_count = 0;
 
@@ -587,14 +609,6 @@ data_ctr ( int ep )
 	// if ( xx_count++ < 10 ) {
 	//     printf ( "Data CTR on endpoint %d isr=%04x epr=%04x\n", ep, up->isr, up->epr[ep] );
 	// }
-
-	/* If it ain't 2, it must be 3.
-	 * We only ever send data on 3.
-	 * We should clear the * CTR bit
-	 * either here or when we send new
-	 * data (we do the latter).
-	 */
-	// if ( ep != 2 ) {
 
 	if ( up->epr[ep] & EP_CTR_TX ) {
 	    printf ( "Data CTR (Tx) on endpoint %d isr=%04x epr=%04x\n", ep, up->isr, up->epr[ep] );
@@ -621,7 +635,9 @@ data_ctr ( int ep )
 		    cq_add ( &in_queue, inbuf[i] );
 	    }
 
-	    /* What is going on ?? */
+	    /* We receive a '?', show status.
+	     *   (should we put the '?' in the queue??)
+	     */
 	    if ( count > 0 && inbuf[0] == '?' ) {
 		printf ( "inqueue size = %d\n", cq_count ( &in_queue ) );
 		if ( ep_info[ep].flags & F_TX_BUSY )
@@ -674,7 +690,7 @@ usb_lp_handler ( void )
 	/* !! This was missing some Tx events.
 	 * We would get an Rx CTR, send a response
 	 * to whatever packet that was and then the
-	 * Tx CTR would get set (and handled in ctr0()
+	 * Tx CTR would get set (and handled in setup_ctr()
 	 * before we even exit this interrupt handler!!
 	 */
 	// enum_handler ();
@@ -706,8 +722,7 @@ usb_lp_handler ( void )
 	    // usb_show ();
 
 	    if ( ep == 0 ) {
-		ctr0 ();
-		// printf ( "M" );
+		setup_ctr ();	// was ctr0()
 	    } else {
 		data_ctr ( ep );
 	    }
@@ -1142,7 +1157,6 @@ endpoint_send_zlp ( int ep )
 	// printf ( "zlp EPR[%d] = %04x\n", ep, up->epr[ep] );
 }
 
-
 /* get data that has been received on an endpoint */
 int
 endpoint_recv ( int ep, char *buf )
@@ -1267,6 +1281,8 @@ enum_wait ( void )
 void
 usb_debug ( void )
 {
+	u32 pm;
+
 	// usb_show ();
 
 	enum_log_init ();
@@ -1291,6 +1307,15 @@ usb_debug ( void )
 	    printf ( "Enumeration failed (timed out)\n" );
 	else
 	    printf ( "Enumeration succeeded *** CONFIGURED !!\n" );
+
+	/*
+	get_PRIMASK ( pm );
+	printf ( "PRImask = %x\n", pm );
+	disable_irq ();
+	get_PRIMASK ( pm );
+	printf ( "PRImask = %x\n", pm );
+	enable_irq ();
+	*/
 
 	// run echo demo
 	test1 ();

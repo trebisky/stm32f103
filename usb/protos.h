@@ -17,6 +17,8 @@ typedef volatile unsigned int vu32;
 static inline void enable_irq() { __asm volatile("cpsie i"); }
 static inline void disable_irq() { __asm volatile("cpsid i"); }
 
+#define get_PRIMASK(val)	asm volatile ( "mrs %0, primask" : "=r" ( val ) )
+#define set_PRIMASK(val)	asm volatile ( "msr primask, %0" : : "r" ( val ) )
 
 void panic ( char * );
 

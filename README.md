@@ -81,6 +81,8 @@ Here is a list of projects from 2017 ---
 9. serial1 - first working serial (uart) driver
 9. lithium1 - lithium ion battery tester --P
 
+9. pulses - generate square wave on some pin
+
 Note that blink_maple is the only demo built to run on the Maple board.
 
 The letters are: M = links for Maple, B = zeros BSS, P = includes printf

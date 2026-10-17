@@ -167,30 +167,55 @@ serial_pending ( void )
 	return cq_count ( &out_queue );
 }
 
+/* Calling this from interrupt code will deadlock
+ */
 void
 serial_flush ( void )
 {
+	printf ( "Serial flush start, count, space: %d, %d\n",
+	    cq_count(&out_queue), cq_space(&out_queue) );
+
 	while ( cq_count ( &out_queue ) > 0 )
 	    ;
+
+	printf ( "Serial flush done, count, space: %d, %d\n",
+	    cq_count(&out_queue), cq_space(&out_queue) );
 }
 
+/* This has yielded a surprising lesson in deadlock
+ * and interrupts, but consider that this may be
+ * called from the USB interrupt.  This is a higher
+ * priority interrupt than the uart, so no uart
+ * interrupts can be handled, so we will spin here
+ * forever waiting for space.
+ */
 void
 serial_putc ( int c )
 {
+	// doing this allows calls from
+	// interrupt code
+	int orig_pri;
 
 	// spin waiting for space
 	// waiting for 2 would be enough
 	while ( cq_space ( &out_queue ) < 10 )
 	    ;
 
+	get_PRIMASK ( orig_pri );
 	disable_irq ();
+
+	// We check space again holding the lock
+	// an unlikely race, but why not?
+	while ( cq_space ( &out_queue ) < 10 )
+	    ;
 
 	if ( c == '\n' )
 	    cq_add ( &out_queue, '\r' );
 
 	cq_add ( &out_queue, c );
 
-	enable_irq ();
+	// enable_irq ();
+	set_PRIMASK ( orig_pri );
 
 	// sort of brutal
 	serial_start ();

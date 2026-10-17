@@ -198,10 +198,13 @@ enum_logger ( int what )
 	    pma_show ();
 #endif
 
-	bte = &bt[0];
+	if ( usb_is_configured () )
+	    return;
 
 	if ( e_count >= ENUM_LIMIT )
 	    return;
+
+	bte = &bt[0];
 
 	// Even printing this breaks enumeration.
 	// printf ( "enum %d\n", what );
